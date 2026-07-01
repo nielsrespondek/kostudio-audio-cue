@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: system-ui, sans-serif; font-size: 13px; color: #c8c8c8; background: transparent; margin: 0; padding: 12px; }
+  label { display: block; margin-bottom: 4px; color: #999; }
+  select { width: 100%; padding: 6px 8px; background: #2a2a2a; color: #fff; border: 1px solid #555; border-radius: 5px; font-size: 13px; cursor: pointer; }
+  option.empty { color: #555; }
+  .hint { margin-top: 10px; color: #666; font-size: 11px; line-height: 1.5; }
+  .status { margin-top: 8px; padding: 6px 8px; border-radius: 4px; font-size: 11px; background: #1a1a1a; }
+  .status.ok      { color: #5a5; }
+  .status.warn    { color: #fa3; }
+  .status.err     { color: #a55; }
+  button.refresh { margin-top: 8px; width: 100%; padding: 5px; background: #333; color: #aaa; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  button.refresh:hover { background: #444; color: #fff; }
+</style>
+</head>
+<body>
+
+<label>Pad auswählen</label>
+<select id="padSelect"><option value="">– Pad wählen –</option></select>
+<button class="refresh" id="refreshBtn">↻ Aktualisieren</button>
+<div class="status err" id="statusEl">Warte auf Verbindung…</div>
+<div class="hint" id="hintEl">Kostudio Audio Cue (neue .exe) muss laufen.<br>Test: <b>http://127.0.0.1:28491/ping</b> im Browser öffnen.</div>
+
+<script>
+  let sdConn = null, myCtx = null, myAction = null, savedPadId = null, retryTimer = null;
+
+  function connectElgatoStreamDeckSocket(port, uuid, regEvent, info, actionInfo) {
+    myCtx = uuid;
+    try { myAction = JSON.parse(actionInfo)?.action || ''; } catch {}
+    try { savedPadId = JSON.parse(actionInfo)?.payload?.settings?.padId ?? null; } catch {}
+
+    sdConn = new WebSocket(`ws://127.0.0.1:${port}`);
+    sdConn.onopen = () => {
+      sdConn.send(JSON.stringify({ event: regEvent, uuid }));
+      scheduleRequest();
+    };
+    sdConn.onmessage = (evt) => {
+      let msg; try { msg = JSON.parse(evt.data); } catch { return; }
+      if (msg.event !== 'sendToPropertyInspector') return;
+
+      const p = msg.payload || {};
+
+      // Kostudio connection status from plugin
+      if (typeof p.kostudioConnected === 'boolean') {
+        if (!p.kostudioConnected) {
+          setStatus('err', 'Kostudio nicht verbunden – neue .exe gebaut und gestartet?');
+          return;
+        }
+      }
+
+      // Pad list
+      if (Array.isArray(p.pads)) {
+        clearTimeout(retryTimer);
+        if (p.pads.length === 0) {
+          setStatus('warn', 'Kostudio verbunden, aber keine Pads vorhanden');
+        } else {
+          populateSelect(p.pads);
+          setStatus('ok', `Kostudio verbunden ✓  (${p.pads.length} Pads)`);
+          document.getElementById('hintEl').style.display = 'none';
+        }
+      }
+    };
+  }
+
+  function setStatus(cls, text) {
+    const el = document.getElementById('statusEl');
+    el.className = 'status ' + cls;
+    el.textContent = text;
+  }
+
+  function scheduleRequest() {
+    clearTimeout(retryTimer);
+    sendRequest();
+    retryTimer = setInterval(sendRequest, 2500);
+  }
+
+  function sendRequest() {
+    if (!sdConn || sdConn.readyState !== WebSocket.OPEN) return;
+    sdConn.send(JSON.stringify({ event: 'sendToPlugin', context: myCtx, action: myAction, payload: { requestPads: true } }));
+  }
+
+  function populateSelect(pads) {
+    const sel = document.getElementById('padSelect');
+    const cur = savedPadId != null ? savedPadId : (sel.value !== '' ? parseInt(sel.value) : null);
+    sel.innerHTML = '<option value="">– Pad wählen –</option>';
+    for (const pad of pads) {
+      const opt = document.createElement('option');
+      opt.value = pad.id;
+      const icon  = pad.playing ? ' ▶' : pad.fading ? ' ⏏' : '';
+      const empty = !pad.hasFile ? ' (leer)' : '';
+      opt.textContent = `${pad.id + 1}: ${pad.name || 'Pad ' + (pad.id+1)}${icon}${empty}`;
+      if (!pad.hasFile) opt.className = 'empty';
+      sel.appendChild(opt);
+    }
+    if (cur != null) { sel.value = cur; savedPadId = null; }
+  }
+
+  document.getElementById('padSelect').addEventListener('change', (e) => {
+    if (!sdConn || sdConn.readyState !== WebSocket.OPEN || e.target.value === '') return;
+    sdConn.send(JSON.stringify({ event: 'sendToPlugin', context: myCtx, action: myAction, payload: { padId: parseInt(e.target.value, 10) } }));
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', sendRequest);
+</script>
+</body>
+</html>

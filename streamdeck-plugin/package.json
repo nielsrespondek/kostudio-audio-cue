@@ -1,0 +1,9 @@
+{
+  "name": "com.kostudio.audiocue.sdplugin",
+  "version": "1.0.0",
+  "description": "Kostudio Audio Cue Stream Deck Plugin",
+  "main": "app.js",
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

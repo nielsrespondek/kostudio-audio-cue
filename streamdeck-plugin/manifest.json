@@ -1,0 +1,74 @@
+{
+  "SDKVersion": 2,
+  "Name": "Kostudio Audio Cue",
+  "Author": "Niels Respondek",
+  "Version": "1.0.0",
+  "Description": "Steuert Kostudio Audio Cue Pads vom Stream Deck aus",
+  "Category": "Kostudio",
+  "CategoryIcon": "imgs/category-icon",
+  "CodePath": "app.js",
+  "Icon": "imgs/plugin-icon",
+  "URL": "https://github.com/nielsrespondek/kostudio-audio-cue",
+  "Profiles": [
+    {
+      "Name": "Profiles/XL",
+      "DeviceType": 2,
+      "Readonly": false,
+      "DontAutoSwitchWhenInstalled": false,
+      "AutoInstall": true
+    },
+    {
+      "Name": "Profiles/Standard",
+      "DeviceType": 0,
+      "Readonly": false,
+      "DontAutoSwitchWhenInstalled": false,
+      "AutoInstall": true
+    }
+  ],
+  "Actions": [
+    {
+      "Icon": "imgs/action-icon",
+      "Name": "Pad steuern",
+      "States": [
+        {
+          "Image": "imgs/state-stopped",
+          "Title": ""
+        },
+        {
+          "Image": "imgs/state-playing",
+          "Title": ""
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Verbindet einen Button mit einem Kostudio Audio Cue Pad",
+      "UUID": "com.kostudio.audiocue.padcontrol",
+      "PropertyInspectorPath": "property-inspector/index.html"
+    },
+    {
+      "Icon": "imgs/state-stopped",
+      "Name": "Stop All",
+      "States": [
+        {
+          "Image": "imgs/state-stopped",
+          "Title": "STOP"
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Stoppt alle Pads sofort",
+      "UUID": "com.kostudio.audiocue.stopall"
+    }
+  ],
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Software": {
+    "MinimumVersion": "6.6"
+  },
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  }
+}
