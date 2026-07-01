@@ -10,24 +10,14 @@ A professional live performance audio cue manager. Load sounds onto pads, build 
 
 | Platform | | |
 |---|---|---|
-| **Windows** x64 | Portable — no install needed | [![Windows](https://img.shields.io/badge/Download-.exe-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/unilordgr/kostudio-audio-cue/releases/latest/download/Kostudio-Audio-Cue-x64.exe) |
-| **macOS** Apple Silicon | M1 / M2 / M3 / M4 | [![macOS ARM](https://img.shields.io/badge/Download-arm64%20.dmg-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/unilordgr/kostudio-audio-cue/releases/latest/download/Kostudio-Audio-Cue-arm64.dmg) |
-| **macOS** Intel | x64 | [![macOS Intel](https://img.shields.io/badge/Download-x64%20.dmg-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/unilordgr/kostudio-audio-cue/releases/latest/download/Kostudio-Audio-Cue-x64.dmg) |
-| **iPad / Browser** | Safari · Chrome · Edge | [![iPad](https://img.shields.io/badge/Download-HTML%20file-00d4ff?style=for-the-badge&logo=safari&logoColor=white)](https://github.com/unilordgr/kostudio-audio-cue/releases/latest/download/Kostudio-Audio-Cue-iPad-Web.html) |
+| **Windows** x64 | Portable — no install needed | [![Windows](https://img.shields.io/badge/Download-.exe-0078d4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/nielsrespondek/kostudio-audio-cue/releases/latest/download/Kostudio-Audio-Cue-x64.exe) |
+| **iPad / Browser** | Safari · Chrome · Edge | [![iPad](https://img.shields.io/badge/Download-HTML%20file-00d4ff?style=for-the-badge&logo=safari&logoColor=white)](https://github.com/nielsrespondek/kostudio-audio-cue/releases/latest/download/Kostudio-Audio-Cue-iPad-Web.html) |
 
-> All releases: [github.com/unilordgr/kostudio-audio-cue/releases](https://github.com/unilordgr/kostudio-audio-cue/releases)
+> All releases: [github.com/nielsrespondek/kostudio-audio-cue/releases](https://github.com/nielsrespondek/kostudio-audio-cue/releases)
+
+> This is a fork of [unilordgr/kostudio-audio-cue](https://github.com/unilordgr/kostudio-audio-cue) with additional features. For macOS builds, use the original repository.
 
 ### First-run warnings (app is unsigned)
-
-**macOS — "damaged and can't be opened"**
-
-macOS quarantines apps downloaded from the internet. Run this once in Terminal, then double-click normally:
-
-```bash
-xattr -cr "/Applications/Kostudio Audio Cue.app"
-```
-
-If you installed it somewhere other than Applications, adjust the path accordingly.
 
 **Windows — SmartScreen prompt**
 
@@ -50,6 +40,7 @@ Click **More info** → **Run anyway**.
 - **Per-pad fade toggle** — enable or disable fade-in per pad independently
 - **Per-pad volume** — individual sliders plus a master volume control
 - **Loop toggle** — loop any cue indefinitely
+- **⏏ Global Stop Fade toggle** *(added in this fork)* — a header button that controls whether stopping a pad (click, touch, or keyboard shortcut) fades out smoothly or cuts instantly. Default is OFF so original behavior is preserved. The play button blinks during the fade as visual feedback.
 
 ### IN / OUT Points
 - **Set an IN point** — scrub the timeline to a position, click **▶ IN** to mark where playback starts
@@ -87,6 +78,7 @@ Click **More info** → **Run anyway**.
 - **Custom hotkeys** — assign Ctrl / Alt / Shift + key combos to any pad
 - **Default pad keys** — `1`–`8`, `Q`–`R` trigger crossfade play instantly
 - **`SPACE`** — advances to the next cue in the stack
+- **`Escape`** *(added in this fork)* — stops all playing pads immediately (respects Stop Fade toggle)
 
 ### Save / Load
 - **Save / Save As / Load** — project files store audio file paths (Windows app) or copies (browser)
@@ -97,7 +89,30 @@ Click **More info** → **Run anyway**.
 - On launch, the app silently checks GitHub for a newer version
 - If an update is available: a native dialog asks **Download Now** or **Later**
 - **Windows**: downloads the new `.exe` in the background, shows a progress bar in the app, then automatically replaces itself and restarts — no browser needed
-- **Mac**: downloads the DMG, attempts to copy the `.app` to Applications automatically
+
+---
+
+## Stream Deck Integration *(added in this fork)*
+
+A companion Stream Deck plugin (`streamdeck-plugin/`) connects Kostudio Audio Cue to your Elgato Stream Deck via a local HTTP server.
+
+### What it does
+- Each Stream Deck button shows the **pad name** and its **live status** as a colored background:
+  - 🟢 Dark green = playing
+  - 🟠 Dark orange = fading out
+  - 🔵 Dark blue = stopped
+  - ⬛ Almost black = empty pad
+- Pressing a button **toggles the pad** (play/stop, respects the Stop Fade toggle)
+- A dedicated **Stop All** button is included
+- **Profiles for Stream Deck XL (8×4) and Standard (5×3)** are bundled and install automatically
+
+### Installation
+1. Download `Kostudio-Audio-Cue.streamDeckPlugin` from the [latest release](../../releases/latest)
+2. Double-click to install — Stream Deck installs the plugin and profile automatically
+3. Build Kostudio from source (see below) — the Stream Deck API server is included in `main.js`
+4. Start Kostudio, load pads — pad names appear on the Stream Deck buttons automatically
+
+> The Stream Deck integration requires building from source since it adds an HTTP server to `main.js`. The standard `.exe` download does not include this feature.
 
 ---
 
@@ -107,11 +122,6 @@ Click **More info** → **Run anyway**.
 1. Download `Kostudio Audio Cue.exe` from the [latest release](../../releases/latest)
 2. Double-click — no installation needed
 3. Drag audio files onto pads or click a pad to browse
-
-### macOS (App)
-1. Download the `.dmg` for your chip from the table above
-2. Open the DMG, drag the app to **Applications**
-3. If macOS says "damaged and can't be opened", run in Terminal: `xattr -cr "/Applications/Kostudio Audio Cue.app"`
 
 ### macOS / Browser (no install)
 Open `kostudio cue.html` directly in **Chrome** or **Edge**.
@@ -127,8 +137,6 @@ Open `kostudio cue.html` directly in **Chrome** or **Edge**.
 | **Save** | Overwrites the last saved `.cuepro` instantly | Same as Save As |
 | **Load** | Opens a `.cuepro` file; missing audio can be re-linked | Opens a saved project folder |
 
-If audio files have moved since last save, a dialog lets you **Locate** each file individually or **Browse Folder** to reconnect all at once.
-
 ---
 
 ## Keyboard Shortcuts
@@ -136,6 +144,7 @@ If audio files have moved since last save, a dialog lets you **Locate** each fil
 | Key | Action |
 |---|---|
 | `SPACE` | Next cue in stack |
+| `Escape` | Stop all pads *(added in this fork)* |
 | `1` – `8`, `Q` – `R` | Default pad shortcuts (crossfade play) |
 | Custom | Assign Ctrl/Alt/Shift combos via the Shortcuts panel |
 
@@ -148,15 +157,12 @@ Click the key badge on any pad to reassign it.
 **Requirements:** Node.js 18+
 
 ```bash
-git clone https://github.com/unilordgr/kostudio-audio-cue.git
+git clone https://github.com/nielsrespondek/kostudio-audio-cue.git
 cd kostudio-audio-cue
 npm install
-npm start          # run on macOS / Linux
+npm start          # run in development
 npm run dist-win   # build Windows portable .exe
-npm run dist-mac   # build Mac DMG (run on macOS)
 ```
-
-Both the Windows `.exe` and Mac `.dmg` are built automatically via GitHub Actions on every push to `main`.
 
 ---
 
@@ -168,7 +174,7 @@ Both the Windows `.exe` and Mac `.dmg` are built automatically via GitHub Action
 - **File System Access API** — save/load in browser mode
 - **IndexedDB** — project registry in browser mode
 - **electron-builder** — packaging
-- **GitHub Actions** — automated Windows + Mac build and release
+- **GitHub Actions** — automated Windows build and release
 
 ---
 
