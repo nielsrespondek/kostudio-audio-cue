@@ -26,11 +26,12 @@ const PLUGIN_UUID = args.pluginUUID;
 const REG_EVENT   = args.registerEvent;
 
 // ── State ─────────────────────────────────────────────────
-const padInstances  = new Map(); // context → padId  (for padcontrol action)
-const stopInstances = new Set(); // contexts           (for stopall action)
-let   firstDevice   = null;      // first connected SD device ID
-let   padState      = [];        // live pad data from Kostudio
-let   kosConnected  = false;      // SSE connection to Kostudio active
+const padInstances  = new Map();
+const stopInstances = new Set();
+let   firstDevice     = null;
+let   firstDeviceType = 0;
+let   padState        = [];
+let   kosConnected    = false;
 
 // ── Stream Deck WebSocket ─────────────────────────────────
 const sdWS = new WebSocket(`ws://127.0.0.1:${SD_PORT}`);
@@ -49,22 +50,36 @@ sdWS.on('message', (raw) => {
 
   switch (msg.event) {
 
-    // ── Device connected → Profil anhand Gerätetyp wählen ──
+    // ── Device connected → Global Settings prüfen ────────────
     case 'deviceDidConnect': {
       if (!firstDevice) {
-        firstDevice = msg.device;
+        firstDevice     = msg.device;
+        firstDeviceType = msg.deviceInfo?.type ?? 0;
 
-        // Gerätetyp erkennen: 2 = XL (8x4), sonst Standard
-        const deviceType  = msg.deviceInfo?.type ?? 0;
-        const profileName = deviceType === 2 ? 'Profiles/XL' : 'Profiles/Standard';
+        // Global Settings abfragen → prüfen ob Profil schon installiert wurde
+        sdSend({ event: 'getGlobalSettings', context: PLUGIN_UUID });
+      }
+      break;
+    }
 
-        // switchToProfile: wenn Profil nicht installiert,
-        // fragt SD den User ob er es installieren möchte
+    // ── Global Settings empfangen ─────────────────────────────
+    case 'didReceiveGlobalSettings': {
+      const settings = msg.payload?.settings || {};
+
+      // Profil-Switch nur einmalig nach der Installation
+      if (!settings.profileInstalled && firstDevice) {
+        const profileName = firstDeviceType === 2 ? 'Profiles/XL' : 'Profiles/Standard';
         sdSend({
           event:   'switchToProfile',
           context: PLUGIN_UUID,
           device:  firstDevice,
           payload: { profile: profileName },
+        });
+        // Als installiert markieren – wird dauerhaft gespeichert
+        sdSend({
+          event:   'setGlobalSettings',
+          context: PLUGIN_UUID,
+          payload: { ...settings, profileInstalled: true },
         });
       }
       break;
