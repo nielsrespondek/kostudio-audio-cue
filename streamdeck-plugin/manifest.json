@@ -2,7 +2,7 @@
   "SDKVersion": 2,
   "Name": "Kostudio Audio Cue",
   "Author": "Niels Respondek",
-  "Version": "1.0.0",
+  "Version": "1.0.1",
   "Description": "Steuert Kostudio Audio Cue Pads vom Stream Deck aus",
   "Category": "Kostudio",
   "CategoryIcon": "imgs/category-icon",
