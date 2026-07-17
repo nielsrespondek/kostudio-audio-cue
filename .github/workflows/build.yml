@@ -1,8 +1,8 @@
-name: Build Windows & Mac
+name: Build Windows + Stream Deck
 
 on:
   push:
-    branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 permissions:
@@ -30,124 +30,57 @@ jobs:
       - name: Build Windows portable .exe
         run: npm run dist-win
 
-      - name: Upload Windows artifact
+      - name: Build Stream Deck plugin
+        run: npm run dist-streamdeck
+
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: dist/*.exe
-          retention-days: 7
-
-  build-mac:
-    runs-on: macos-14   # Sonoma / Apple Silicon — avoids macOS 15 hdiutil bug
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build Mac DMG
-        # macOS 15 (Sequoia) has a race in hdiutil detach that exits non-zero
-        # even after the DMG is fully written. We use macos-14 to avoid this,
-        # but also add a fallback: if electron-builder exits non-zero yet the
-        # .dmg files exist on disk, we treat the build as successful.
-        run: |
-          npm run dist-mac || {
-            if ls dist/*.dmg 2>/dev/null | grep -q .; then
-              echo "DMG files created — hdiutil detach error was the only issue, continuing."
-            else
-              echo "Mac build actually failed — no .dmg files found."
-              exit 1
-            fi
-          }
-
-      - name: Upload Mac artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-build
-          path: dist/*.dmg
+          path: |
+            dist/*.exe
+            dist/*.streamDeckPlugin
           retention-days: 7
 
   publish-release:
-    needs: [build-windows, build-mac]
+    needs: [build-windows]
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get version from package.json
+      - name: Determine release tag
         id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Download Windows build
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: windows-build
           path: release-files
 
-      - name: Download Mac build
-        uses: actions/download-artifact@v4
-        with:
-          name: mac-build
-          path: release-files
-
-      - name: Copy iPad web app to release files
-        run: cp index.html "release-files/Kostudio-Audio-Cue-iPad-Web.html"
-
       - name: Write release notes
         run: |
-          TAG="v${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
           cat > /tmp/release-notes.md << NOTES
-          ## What's new in ${TAG}
+          ## Kostudio Audio Cue ${TAG}
 
-          ### macOS fix (v1.2.7)
-          - Fixed: "damaged and can't be opened" error on macOS — set identity:null and hardenedRuntime:false so Gatekeeper no longer rejects the unsigned app
-          - README: updated first-run instructions with the correct xattr fix command
-
-          ### App icon (v1.2.6)
-          - New Kcue icon across the app -- taskbar, dock, title bar, and browser tab
-          - Scale control (− / + zoom buttons) is now always fixed and never scales with the UI
-          - Cue stack panel and footer bar are now fixed overlays -- they stay readable at any zoom level
-
-          ### iPad fixes (v1.2.5)
-          - Fixed: tapping a pad now correctly opens the file picker on iOS Safari
-          - Fixed: all buttons now respond instantly -- removed 300ms touch delay
-          - Fixed: grey tap flash removed from pads and buttons
-          - Fixed: pad labels now say "Tap to load audio" instead of "Click or drop file"
-          - Added: long-press on pad name to rename on touch
-
-          ### iPad / Touch support (v1.2.4)
-          - Download the iPad HTML file, open in Safari on iPad, tap Share -> Add to Home Screen to install as a standalone app
-          - Cue stack moves to a bottom sheet -- tap the pill handle to expand/collapse
-          - Play Cue + Next Cue always visible even when the list is collapsed
-          - Save and Load work natively in Safari (stored on device via IndexedDB)
-          - Export / Import .cuepro files to back up or transfer between devices
-          - Safe-area support for notch and home indicator
-
-          ### Other changes
-          - Removed non-functional Sound FX / Freesound panel
-
-          ---
-
-          Windows: Download the .exe -- portable, no install required.
-          Mac: Download the .dmg, open it, drag the app to Applications. On first launch right-click -> Open if macOS warns you.
-          iPad / Browser: Download Kostudio Audio Cue (iPad-Web).html, open in Safari and Add to Home Screen.
+          Windows: Download Kostudio-Audio-Cue-x64.exe — portable, no install required.
+          Stream Deck: Download Kostudio-Audio-Cue.streamDeckPlugin and double-click to install.
           NOTES
 
       - name: Publish versioned release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="v${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag }}"
           gh release delete "$TAG" --yes --repo ${{ github.repository }} 2>/dev/null || true
-          git push origin ":refs/tags/$TAG" 2>/dev/null || true
           gh release create "$TAG" release-files/* \
             --repo ${{ github.repository }} \
             --title "Kostudio Audio Cue ${TAG}" \
