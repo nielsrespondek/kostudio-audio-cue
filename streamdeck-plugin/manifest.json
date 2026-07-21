@@ -2,7 +2,7 @@
   "SDKVersion": 2,
   "Name": "Kostudio Audio Cue",
   "Author": "Niels Respondek",
-  "Version": "1.0.1",
+  "Version": "1.1.0",
   "Description": "Steuert Kostudio Audio Cue Pads vom Stream Deck aus",
   "Category": "Kostudio",
   "CategoryIcon": "imgs/category-icon",
@@ -56,6 +56,23 @@
       "SupportedInMultiActions": true,
       "Tooltip": "Stoppt alle Pads sofort",
       "UUID": "com.kostudio.audiocue.stopall"
+    },
+    {
+      "Icon": "imgs/action-icon",
+      "Name": "Cue Play/Stop",
+      "States": [
+        {
+          "Image": "imgs/state-stopped",
+          "Title": ""
+        },
+        {
+          "Image": "imgs/state-playing",
+          "Title": ""
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Startet bzw. stoppt den aktuell ausgewaehlten Cue in der Liste (= PLAY CUE)",
+      "UUID": "com.kostudio.audiocue.cuecontrol"
     }
   ],
   "OS": [

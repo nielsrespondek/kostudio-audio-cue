@@ -68,8 +68,6 @@ html[data-theme="light"] .modal-overlay { background: rgba(0,10,50,.45); }
 html[data-theme="light"] .modal-box { box-shadow: 0 24px 64px rgba(0,10,60,.22); }
 html[data-theme="light"] .proj-item { box-shadow: 0 1px 4px var(--shadow); }
 html[data-theme="light"] .sh-custom-row { box-shadow: 0 1px 4px var(--shadow); }
-html[data-theme="light"] .next-btn { background: linear-gradient(135deg,#f0f5ff 0%,#e8eeff 100%); }
-html[data-theme="light"] .next-btn:hover:not(:disabled) { background: var(--accent); }
 html[data-theme="light"] .pad-prog-fill { opacity: .85; }
 html[data-theme="light"] .playing-dot { box-shadow: 0 0 10px var(--playing),0 0 4px var(--playing); }
 html[data-theme="light"] .pad-add-tile:hover { background: rgba(29,95,216,.05); }
@@ -641,8 +639,14 @@ html[data-theme="light"] .prog-active-zone { background: rgba(0,0,0,.09); }
 .stack-n   { width: 18px; font-size: 10px; color: var(--muted); text-align: right; flex-shrink: 0; }
 .stack-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .stack-lbl { flex: 1; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stack-rt { font-family: monospace; font-size: 10.5px; color: var(--muted); flex-shrink: 0; min-width: 34px; text-align: right; }
+.stack-rt.running { color: var(--playing); font-weight: 700; }
 .stack-rm  { opacity: 0; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px; transition: all .12s; }
 .stack-item:hover .stack-rm { opacity: 1; }
+.stack-move { display: flex; flex-direction: column; gap: 1px; flex-shrink: 0; }
+.stack-move-btn { width: 14px; height: 10px; line-height: 9px; padding: 0; margin: 0; border: none; background: transparent; color: var(--muted); font-size: 8px; cursor: pointer; border-radius: 2px; display: flex; align-items: center; justify-content: center; }
+.stack-move-btn:hover:not(:disabled) { color: var(--accent); background: rgba(255,255,255,.08); }
+.stack-move-btn:disabled { opacity: .2; cursor: default; }
 .stack-rm:hover { color: var(--danger); }
 
 .stack-foot {
@@ -690,26 +694,14 @@ html[data-theme="light"] .prog-active-zone { background: rgba(0,0,0,.09); }
 }
 .play-cue-btn:hover:not(:disabled) { background: var(--playing); color: #000; }
 .play-cue-btn:disabled { opacity: .3; cursor: default; }
+.add-mp3-btn { background: transparent; border: 1px solid var(--playing); color: var(--playing); border-radius: 6px; padding: 3px 9px; font-size: 11px; font-weight: 700; cursor: pointer; letter-spacing: .3px; }
+.add-mp3-btn:hover { background: var(--playing); color: #000; }
+.stack-dot-mp3 { display: flex; align-items: center; justify-content: center; background: var(--playing); color: #000; font-size: 11px; font-weight: 900; }
+.stack-item-mp3 .stack-lbl { font-style: italic; }
 .play-cue-btn.is-playing { border-color: var(--danger); color: var(--danger); }
 .play-cue-btn.is-playing:hover:not(:disabled) { background: var(--danger); color: #fff; }
 html[data-theme="light"] .play-cue-btn:hover:not(:disabled) { color: #fff; }
 html[data-theme="light"] .play-cue-btn.is-playing:hover:not(:disabled) { color: #fff; }
-
-.next-btn {
-  width: 100%;
-  padding: 10px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--accent);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  transition: all .15s;
-}
-.next-btn:hover:not(:disabled) { background: var(--accent); color: #000; border-color: var(--accent); }
-.next-btn:disabled { opacity: .3; cursor: default; }
 
 /* ── Footer ── */
 footer {
@@ -1207,7 +1199,6 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
   }
   .auto-row { flex-basis: 100%; order: 1; }
   .play-cue-btn { flex: 1; min-width: 0; order: 2; padding: 14px 8px; font-size: 14px; }
-  .next-btn     { flex: 1; min-width: 0; order: 3; padding: 14px 8px; font-size: 14px; }
 
   /* --- Pads: 3 columns default, no keyboard badges --- */
   .pads-grid { grid-template-columns: repeat(3, 1fr); }
@@ -1283,6 +1274,7 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
       <span class="stack-scale-val" id="stackScaleVal">100%</span>
       <button class="scale-btn" onclick="adjustStackScale(0.1)" title="Larger text">+</button>
     </div>
+    <button class="add-mp3-btn" onclick="loadStackFiles()" title="Load MP3s directly into this cue stack (no pad needed)">+ MP3</button>
     <button class="clear-btn" onclick="clearStack()">Clear</button>
   </div>
   <div class="scene-tabs-wrap" id="sceneTabsWrap"></div>
@@ -1292,8 +1284,11 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
       <div class="toggle-sw" id="autoToggle"></div>
       <span>Auto-advance</span>
     </div>
+    <div class="auto-row" onclick="toggleAutoSelect()" title="After a track ends, select the next cue but wait — start it with PLAY CUE.">
+      <div class="toggle-sw" id="autoSelectToggle"></div>
+      <span>Auto-select next</span>
+    </div>
     <button class="play-cue-btn" id="playCueBtn" onclick="playCue()" disabled>▶ PLAY CUE</button>
-    <button class="next-btn" id="nextBtn" onclick="nextCue()" disabled>NEXT CUE ▶</button>
   </div>
 </div>
 
@@ -1307,7 +1302,7 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
   </div>
   <div class="tips">
     <div class="tip"><kbd>KEY</kbd> play</div>
-    <div class="tip"><kbd>SPACE</kbd> next</div>
+    <div class="tip"><kbd>SPACE</kbd> play cue</div>
     <div class="tip">click bar to seek</div>
   </div>
 </footer>
@@ -1362,8 +1357,10 @@ let pads = DEFAULT_KEYS.map((key, i) => ({
 let scenes          = [{ id: 0, name: 'Scene 1', stack: [], stackIdx: -1 }];
 let sceneIdSeq      = 1;
 let currentSceneIdx = 0;
+let stackSidSeq     = 1;  // id sequence for standalone (MP3-in-stack) cue items
 
 let autoAdv         = false;
+let autoSelect      = false; // Auto-select: after a track ends, select next cue but do NOT start it
 let masterVol       = 1.0;
 let fadeDuration    = 2;
 let fadeInDuration  = 0.2; // Fade-in when a pad starts. Short by default so a slightly-off hook is smoothed without losing punch.
@@ -1388,7 +1385,17 @@ function broadcastPadState() {
     fading:  document.getElementById(`pad${p.id}`)?.classList.contains('fading') || false,
     hasFile: !!p.file,
   }));
-  window.electronAPI.sendPadState({ type: 'pads', pads: state });
+  const s = (typeof getScene === 'function') ? getScene() : null;
+  let cue = { hasSelection: false, playing: false, name: '' };
+  if (s && s.stackIdx >= 0 && s.stack[s.stackIdx]) {
+    const h = stackHandle(s.stack[s.stackIdx]);
+    cue = {
+      hasSelection: true,
+      playing: !!(h && h.playing),
+      name: (h && h.name) || '',
+    };
+  }
+  window.electronAPI.sendPadState({ type: 'pads', pads: state, cue });
 }
 let padsScale       = 1.0;
 let stackScale      = 1.0;
@@ -1744,6 +1751,7 @@ function attachAudio(pad, file) {
       updatePlayCueBtn();
       setStatus(`"${pad.name}" finished`);
       if (autoAdv) checkAutoAdvance(pad.id);
+      else if (autoSelect) checkAutoSelect(pad.id);
     }
   });
   pad.file  = file;
@@ -1768,6 +1776,149 @@ function clearPad(id) {
 }
 
 // ── Cue Stack ─────────────────────────────────────────────
+// A stack item is either { padId }  (references a left pad, may loop)
+// or { standalone:true, sid, name, file, audio, filePath }  (owns its own MP3).
+function isStandalone(item) { return !!(item && item.standalone); }
+
+// Uniform playable handle for either item type.
+function stackHandle(item) {
+  if (!item) return null;
+  if (isStandalone(item)) {
+    return {
+      standalone: true,
+      get playing() { return item._playing; },
+      set playing(v) { item._playing = v; },
+      audio: item.audio,
+      name:  item.name,
+      loop:  false,
+      vol:   item.vol ?? 1.0,
+      inPoint: null,
+    };
+  }
+  return pads[item.padId];
+}
+
+// Play a stack item (works for both pad-refs and standalone MP3s).
+function playStackHandle(item, withFade = false) {
+  if (isStandalone(item)) {
+    if (!item.audio) return;
+    clearStandaloneFade(item);
+    const targetVol = (item.vol ?? 1.0) * masterVol;
+    item.audio.currentTime = 0;
+    const useFade = fadeInGlobal;
+    item.audio.volume = useFade ? 0 : targetVol;
+    item.audio.play().catch(() => {});
+    item._playing = true;
+    setStatus(`Playing "${item.name}"`);
+    if (useFade) startStandaloneFade(item, targetVol, fadeInDuration);
+  } else {
+    playPad(item.padId, withFade);
+  }
+}
+
+// Stop a stack item.
+function stopStackHandle(item, withFade = false) {
+  if (isStandalone(item)) {
+    if (!item.audio) return;
+    if (withFade) {
+      startStandaloneFade(item, 0, fadeDuration, () => {
+        if (item.audio) { item.audio.pause(); item.audio.currentTime = 0; item.audio.volume = (item.vol ?? 1.0) * masterVol; }
+        item._playing = false;
+        updatePlayCueBtn();
+      });
+    } else {
+      clearStandaloneFade(item);
+      item.audio.pause(); item.audio.currentTime = 0;
+      item._playing = false;
+      updatePlayCueBtn();
+    }
+  } else {
+    stopPad(item.padId, withFade);
+  }
+}
+
+// Simple volume fade for standalone items (pad fades live in fadeTimers by pad id).
+const standaloneFadeTimers = new Map();
+function clearStandaloneFade(item) {
+  const t = standaloneFadeTimers.get(item);
+  if (t) { clearInterval(t); standaloneFadeTimers.delete(item); }
+}
+function startStandaloneFade(item, targetVol, seconds, onDone) {
+  clearStandaloneFade(item);
+  if (!item.audio) { onDone?.(); return; }
+  const startVol = item.audio.volume;
+  const steps = Math.max(1, Math.round((seconds * 1000) / 30));
+  let i = 0;
+  const t = setInterval(() => {
+    i++;
+    const k = i / steps;
+    if (item.audio) item.audio.volume = Math.min(1, Math.max(0, startVol + (targetVol - startVol) * k));
+    if (i >= steps) { clearStandaloneFade(item); if (item.audio) item.audio.volume = targetVol; onDone?.(); }
+  }, 30);
+  standaloneFadeTimers.set(item, t);
+}
+
+// Load one or more MP3 files straight into the stack (no left pad used).
+function loadStackFiles() {
+  const inp = Object.assign(document.createElement('input'), {
+    type: 'file', accept: 'audio/*', multiple: true
+  });
+  inp.addEventListener('change', () => {
+    const files = Array.from(inp.files || []);
+    if (files.length) addStandaloneFiles(files);
+    try { document.body.removeChild(inp); } catch {}
+  });
+  document.body.appendChild(inp);
+  inp.click();
+}
+
+function addStandaloneFiles(files) {
+  const s = getScene();
+  for (const file of files) {
+    const item = {
+      standalone: true,
+      sid: stackSidSeq++,
+      name: stripExt(file.name),
+      file,
+      filePath: file.path || null,
+      vol: 1.0,
+      _playing: false,
+    };
+    attachStandaloneAudio(item, file);
+    s.stack.push(item);
+  }
+  renderStack();
+  setStatus(`${files.length} MP3${files.length !== 1 ? 's' : ''} added to stack`);
+  scheduleAutosave();
+}
+
+function attachStandaloneAudio(item, file) {
+  const audio = new Audio(URL.createObjectURL(file));
+  audio.loop = false;               // event playlist items never loop
+  audio.volume = (item.vol ?? 1.0) * masterVol;
+  audio.preload = 'auto';
+  audio.addEventListener('ended', () => {
+    item._playing = false;
+    updatePlayCueBtn();
+    setStatus(`"${item.name}" finished`);
+    if (autoAdv) checkAutoAdvanceStandalone(item);
+    else if (autoSelect) checkAutoSelectStandalone(item);
+  });
+  item.audio = audio;
+}
+
+function checkAutoAdvanceStandalone(finishedItem) {
+  const s = getScene();
+  if (s.stackIdx < 0 || !s.stack[s.stackIdx]) return;
+  if (s.stack[s.stackIdx] === finishedItem) setTimeout(nextCue, 250);
+}
+
+function checkAutoSelectStandalone(finishedItem) {
+  const s = getScene();
+  if (s.stackIdx < 0 || !s.stack[s.stackIdx]) return;
+  if (s.stack[s.stackIdx] === finishedItem) setTimeout(selectNextCue, 250);
+}
+
 function addToStack(padId) {
   const pad = pads[padId];
   if (!pad.file) return;
@@ -1777,8 +1928,23 @@ function addToStack(padId) {
   scheduleAutosave();
 }
 
+function moveStackItem(i, dir) {
+  const s = getScene();
+  const j = i + dir;
+  if (j < 0 || j >= s.stack.length) return;
+  const tmp = s.stack[i];
+  s.stack[i] = s.stack[j];
+  s.stack[j] = tmp;
+  if (s.stackIdx === i) s.stackIdx = j;
+  else if (s.stackIdx === j) s.stackIdx = i;
+  renderStack();
+  scheduleAutosave();
+}
+
 function removeFromStack(i) {
   const s = getScene();
+  const gone = s.stack[i];
+  if (isStandalone(gone)) { clearStandaloneFade(gone); if (gone.audio) { gone.audio.pause(); gone.audio.src = ''; } }
   s.stack.splice(i, 1);
   if (s.stackIdx >= s.stack.length) s.stackIdx = s.stack.length - 1;
   renderStack();
@@ -1787,6 +1953,7 @@ function removeFromStack(i) {
 
 function clearStack() {
   const s = getScene();
+  s.stack.forEach(it => { if (isStandalone(it)) { clearStandaloneFade(it); if (it.audio) { it.audio.pause(); it.audio.src = ''; } } });
   s.stack = []; s.stackIdx = -1;
   renderStack();
   setStatus('Stack cleared');
@@ -1796,10 +1963,10 @@ function clearStack() {
 function nextCue() {
   const s = getScene();
   if (!s.stack.length) return;
-  if (s.stackIdx >= 0 && s.stack[s.stackIdx]) stopPad(s.stack[s.stackIdx].padId, true);
+  if (s.stackIdx >= 0 && s.stack[s.stackIdx]) stopStackHandle(s.stack[s.stackIdx], true);
   s.stackIdx = (s.stackIdx + 1) % s.stack.length;
   const item = s.stack[s.stackIdx];
-  if (item) { playPad(item.padId, true); renderStack(); updatePlayCueBtn(); }
+  if (item) { playStackHandle(item, true); renderStack(); updatePlayCueBtn(); }
 }
 
 function playStackItem(i) {
@@ -1813,15 +1980,16 @@ function playCue() {
   const s = getScene();
   if (s.stackIdx < 0 || !s.stack[s.stackIdx]) return;
   const item = s.stack[s.stackIdx];
-  const pad  = pads[item.padId];
-  if (pad.playing) {
+  const h    = stackHandle(item);
+  if (h && h.playing) {
     // Already playing → stop it
-    stopPad(item.padId, true);
+    stopStackHandle(item, true);
     updatePlayCueBtn();
   } else {
-    // Stop everything, then play selected cue
+    // Stop everything (pads + other standalone items), then play selected cue
     pads.forEach(p => { if (p.playing) stopPad(p.id, false); });
-    playPad(item.padId, true);
+    s.stack.forEach(it => { if (isStandalone(it) && it._playing) stopStackHandle(it, false); });
+    playStackHandle(item, true);
     updatePlayCueBtn();
   }
 }
@@ -1832,7 +2000,8 @@ function updatePlayCueBtn() {
   const s = getScene();
   const hasSelection = s.stackIdx >= 0 && !!s.stack[s.stackIdx];
   btn.disabled = !hasSelection;
-  if (hasSelection && pads[s.stack[s.stackIdx].padId].playing) {
+  const selHandle = hasSelection ? stackHandle(s.stack[s.stackIdx]) : null;
+  if (selHandle && selHandle.playing) {
     btn.textContent = '■ STOP CUE';
     btn.classList.add('is-playing');
   } else {
@@ -1847,29 +2016,80 @@ function checkAutoAdvance(finishedPadId) {
   if (s.stack[s.stackIdx].padId === finishedPadId) setTimeout(nextCue, 250);
 }
 
+function checkAutoSelect(finishedPadId) {
+  const s = getScene();
+  if (s.stackIdx < 0 || !s.stack[s.stackIdx]) return;
+  const cur = s.stack[s.stackIdx];
+  if (!isStandalone(cur) && cur.padId === finishedPadId) setTimeout(selectNextCue, 250);
+}
+
 function toggleAutoAdvance() {
   autoAdv = !autoAdv;
-  document.getElementById('autoToggle').className = `toggle-sw${autoAdv ? ' on' : ''}`;
+  if (autoAdv) autoSelect = false; // mutually exclusive: advancing already includes selecting
+  updateAutoToggles();
   scheduleAutosave();
+}
+
+function toggleAutoSelect() {
+  autoSelect = !autoSelect;
+  if (autoSelect) autoAdv = false; // don't auto-start when only selecting
+  updateAutoToggles();
+  scheduleAutosave();
+}
+
+function updateAutoToggles() {
+  const a = document.getElementById('autoToggle');
+  if (a) a.className = `toggle-sw${autoAdv ? ' on' : ''}`;
+  const b = document.getElementById('autoSelectToggle');
+  if (b) b.className = `toggle-sw${autoSelect ? ' on' : ''}`;
+}
+
+// Move selection to the next cue WITHOUT starting playback.
+function selectNextCue() {
+  const s = getScene();
+  if (!s.stack.length) return;
+  s.stackIdx = (s.stackIdx + 1) % s.stack.length;
+  renderStack();
+  updatePlayCueBtn();
+  broadcastPadState();
+  const nextItem = s.stack[s.stackIdx];
+  const nm = nextItem ? (isStandalone(nextItem) ? nextItem.name : pads[nextItem.padId]?.name) : '';
+  if (nm) setStatus(`Next cue ready: "${nm}" — press PLAY CUE`);
 }
 
 function renderStack() {
   const s    = getScene();
   const list = document.getElementById('stackList');
-  const btn  = document.getElementById('nextBtn');
-  btn.disabled = !s.stack.length;
   if (!s.stack.length) {
-    list.innerHTML = '<div class="stack-empty">Use <strong>+ Stack</strong> on any loaded pad<br>to build your cue sequence</div>';
+    list.innerHTML = '<div class="stack-empty">Use <strong>+ Stack</strong> on any loaded pad,<br>or <strong>+ MP3</strong> below to load songs directly<br>into this cue sequence</div>';
     updatePlayCueBtn();
     return;
   }
   list.innerHTML = s.stack.map((item, i) => {
-    const pad    = pads[item.padId];
     const active = i === s.stackIdx;
+    if (isStandalone(item)) {
+      return `<div class="stack-item stack-item-mp3${active ? ' active' : ''}" onclick="playStackItem(${i})">
+        <span class="stack-n">${i + 1}</span>
+        <div class="stack-dot stack-dot-mp3" title="MP3 loaded directly into the stack">♪</div>
+        <div class="stack-move">
+          <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},-1)" ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
+          <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},1)" ${i === s.stack.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
+        </div>
+        <span class="stack-lbl">${escHtml(item.name || 'Unnamed')}</span>
+        <span class="stack-rt" id="stack-rt-${i}"></span>
+        <span class="stack-rm" onclick="event.stopPropagation();removeFromStack(${i})">×</span>
+      </div>`;
+    }
+    const pad = pads[item.padId];
     return `<div class="stack-item${active ? ' active' : ''}" onclick="playStackItem(${i})">
       <span class="stack-n">${i + 1}</span>
       <div class="stack-dot" style="background:${pad.color}"></div>
+      <div class="stack-move">
+        <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},-1)" ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
+        <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},1)" ${i === s.stack.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
+      </div>
       <span class="stack-lbl">${escHtml(pad.name || 'Unnamed')}</span>
+      <span class="stack-rt" id="stack-rt-${i}"></span>
       <span class="stack-rm" onclick="event.stopPropagation();removeFromStack(${i})">×</span>
     </div>`;
   }).join('');
@@ -2174,12 +2394,35 @@ function startRaf() {
             stopPad(pad.id, false);
             setStatus(`"${pad.name}" finished`);
             if (autoAdv) checkAutoAdvance(pad.id);
+            else if (autoSelect) checkAutoSelect(pad.id);
           }
         }
       }
     });
+    updateStackCountdowns();
     requestAnimationFrame(tick);
   })();
+}
+
+// Show remaining time (e.g. -2:22) on the currently-playing cue item.
+function updateStackCountdowns() {
+  const s = getScene();
+  if (!s || !s.stack.length) return;
+  for (let i = 0; i < s.stack.length; i++) {
+    const el = document.getElementById(`stack-rt-${i}`);
+    if (!el) continue;
+    const h = stackHandle(s.stack[i]);
+    const a = h && h.audio;
+    if (a && h.playing && a.duration) {
+      const end  = (!h.standalone && h.outPoint != null) ? h.outPoint : a.duration;
+      const rem  = Math.max(0, end - a.currentTime);
+      el.textContent = '-' + fmt(rem);
+      el.classList.add('running');
+    } else if (el.textContent) {
+      el.textContent = '';
+      el.classList.remove('running');
+    }
+  }
 }
 
 // ── Rename ────────────────────────────────────────────────
@@ -2243,7 +2486,7 @@ function onKey(e) {
   if (modalOpen) return;
 
   if (e.key === 'Escape') { e.preventDefault(); stopAll(); return; }
-  if (e.key === ' ') { e.preventDefault(); nextCue(); return; }
+  if (e.key === ' ') { e.preventDefault(); playCue(); return; }
 
   const combo  = getCombo(e);
   const custom = customShortcuts.find(s => s.combo === combo);
@@ -2308,10 +2551,24 @@ async function saveProject(name) {
     padConfigs.push(pc);
   }
 
+  // Copy standalone (MP3-in-stack) files into the folder too.
+  for (const sc of scenes) {
+    for (const it of sc.stack) {
+      if (!isStandalone(it) || !it.file) continue;
+      const fname = `stack_${it.sid}_${sanitizeFilename(it.file.name)}`;
+      try {
+        const fh = await dirHandle.getFileHandle(fname, { create: true });
+        const w  = await fh.createWritable();
+        await w.write(it.file); await w.close();
+        it._storedFile = fname;
+      } catch (err) { console.warn('Stack audio copy failed', it.sid, err); }
+    }
+  }
+
   const config = {
     name, version: 3, savedAt: Date.now(),
-    masterVol, autoAdv, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
-    scenes: scenes.map(s => ({ id: s.id, name: s.name, stack: s.stack.map(i => i.padId), stackIdx: s.stackIdx })),
+    masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
+    scenes: scenes.map(s => ({ id: s.id, name: s.name, stack: s.stack.map(serStackItem), stackIdx: s.stackIdx })),
     currentSceneIdx,
     customShortcuts,
     pads: padConfigs,
@@ -2374,17 +2631,34 @@ async function doLoadFromFolder(dirHandle, projectName) {
   if (config.version >= 3 && config.scenes) {
     scenes = config.scenes.map(s => ({
       id: s.id, name: s.name,
-      stack:    (s.stack || []).map(padId => ({ padId })),
+      stack:    deserStack(s.stack),
       stackIdx: s.stackIdx ?? -1,
     }));
     sceneIdSeq      = scenes.reduce((m, s) => Math.max(m, s.id + 1), 0);
     currentSceneIdx = Math.min(config.currentSceneIdx ?? 0, scenes.length - 1);
   } else {
-    scenes = [{ id: 0, name: 'Scene 1', stack: (config.stack || []).map(padId => ({ padId })), stackIdx: config.stackIdx ?? -1 }];
+    scenes = [{ id: 0, name: 'Scene 1', stack: deserStack(config.stack), stackIdx: config.stackIdx ?? -1 }];
     sceneIdSeq = 1; currentSceneIdx = 0;
+  }
+  bumpStackSidSeq();
+  // Re-attach standalone stack MP3s from the project folder.
+  for (let si = 0; si < scenes.length; si++) {
+    const cs = (config.scenes && config.scenes[si]) ? config.scenes[si].stack : null;
+    for (let ii = 0; ii < scenes[si].stack.length; ii++) {
+      const it = scenes[si].stack[ii];
+      if (!isStandalone(it)) continue;
+      const d = cs && cs[ii];
+      const stored = d && d.storedFile;
+      if (!stored) continue;
+      try {
+        const fh = await dirHandle.getFileHandle(stored);
+        attachStandaloneAudio(it, await fh.getFile());
+      } catch { /* missing; leave silent */ }
+    }
   }
 
   autoAdv         = config.autoAdv      ?? false;
+  autoSelect      = config.autoSelect   ?? false;
   stopFadeGlobal         = config.stopFadeGlobal ?? false;
   fadeInGlobal    = config.fadeInGlobal ?? true;
   masterVol       = config.masterVol    ?? 1;
@@ -2400,7 +2674,7 @@ async function doLoadFromFolder(dirHandle, projectName) {
   document.getElementById('fadeInDurInput').value = fadeInDuration;
   updateStopFadeBtn();
   updateFadeInBtn();
-  document.getElementById('autoToggle').className = `toggle-sw${autoAdv ? ' on' : ''}`;
+  updateAutoToggles();
   applyScales();
 
   buildPads();
@@ -2545,10 +2819,10 @@ async function doElectronSave(savePath) {
   const projectName = savePath.replace(/.*[\\/]/, '').replace(/\.cuepro$/i, '');
   const config = {
     name: projectName, version: 5, savedAt: Date.now(),
-    masterVol, autoAdv, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
+    masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
     scenes: scenes.map(s => ({
       id: s.id, name: s.name,
-      stack: s.stack.map(i => i.padId), stackIdx: s.stackIdx
+      stack: s.stack.map(serStackItem), stackIdx: s.stackIdx
     })),
     currentSceneIdx, customShortcuts,
     pads: pads.map(p => ({
@@ -2609,6 +2883,20 @@ async function loadElectronProject() {
   }
 
   restoreElectronProjectSettings(config);
+  bumpStackSidSeq();
+  // Re-attach standalone stack MP3s from their file paths.
+  for (const sc of scenes) {
+    for (const it of sc.stack) {
+      if (!isStandalone(it) || !it.filePath) continue;
+      try {
+        if (await window.electronAPI.fileExists(it.filePath)) {
+          const buf = await window.electronAPI.readFile(it.filePath);
+          const fname = it.filePath.replace(/.*[\\/]/, '');
+          attachStandaloneAudio(it, new File([new Blob([buf])], fname));
+        }
+      } catch { /* missing; leave silent */ }
+    }
+  }
   currentSavePath = loadPath;
   localStorage.removeItem('cue-autosave');
   buildPads(); renderSceneTabs(); renderStack();
@@ -2625,7 +2913,7 @@ function restoreElectronProjectSettings(config) {
   if (config.scenes) {
     scenes = config.scenes.map(s => ({
       id: s.id, name: s.name,
-      stack: (s.stack || []).map(padId => ({ padId })),
+      stack: deserStack(s.stack),
       stackIdx: s.stackIdx ?? -1
     }));
     sceneIdSeq      = scenes.reduce((m, s) => Math.max(m, s.id + 1), 0);
@@ -2635,6 +2923,7 @@ function restoreElectronProjectSettings(config) {
     sceneIdSeq = 1; currentSceneIdx = 0;
   }
   autoAdv         = config.autoAdv         ?? false;
+  autoSelect      = config.autoSelect      ?? false;
   stopFadeGlobal         = config.stopFadeGlobal ?? false;
   fadeInGlobal    = config.fadeInGlobal ?? true;
   masterVol       = config.masterVol       ?? 1;
@@ -2649,7 +2938,7 @@ function restoreElectronProjectSettings(config) {
   document.getElementById('fadeInDurInput').value   = fadeInDuration;
   updateStopFadeBtn();
   updateFadeInBtn();
-  document.getElementById('autoToggle').className = `toggle-sw${autoAdv ? ' on' : ''}`;
+  updateAutoToggles();
   applyScales();
 }
 
@@ -2863,6 +3152,30 @@ function updateGridWidth() {
 }
 
 // ── Autosave ──────────────────────────────────────────────
+// ── Stack (cue) item (de)serialization ──────────────────────
+// Old format: a bare number = padId. New: object descriptor.
+function serStackItem(item) {
+  if (isStandalone(item)) {
+    return { t: 'mp3', sid: item.sid, name: item.name, filePath: item.filePath || null, storedFile: item._storedFile || null };
+  }
+  return { t: 'pad', padId: item.padId };
+}
+function deserStackItem(d) {
+  if (typeof d === 'number') return { padId: d };          // legacy
+  if (d && d.t === 'mp3') {
+    return { standalone: true, sid: d.sid ?? stackSidSeq++, name: d.name || 'Unnamed',
+             file: null, audio: null, filePath: d.filePath || null, vol: 1.0, _playing: false };
+  }
+  return { padId: d.padId };
+}
+function deserStack(arr) { return (arr || []).map(deserStackItem); }
+// Keep stackSidSeq ahead of any restored sids.
+function bumpStackSidSeq() {
+  let m = stackSidSeq;
+  scenes.forEach(s => s.stack.forEach(it => { if (isStandalone(it) && it.sid >= m) m = it.sid + 1; }));
+  stackSidSeq = m;
+}
+
 function scheduleAutosave() {
   clearTimeout(asTimer);
   asTimer = setTimeout(saveAutosave, 1500);
@@ -2870,8 +3183,8 @@ function scheduleAutosave() {
 function saveAutosave() {
   const data = {
     savedAt: Date.now(),
-    masterVol, autoAdv, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale, currentSavePath,
-    scenes: scenes.map(s => ({ id: s.id, name: s.name, stack: s.stack.map(i => i.padId), stackIdx: s.stackIdx })),
+    masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale, currentSavePath,
+    scenes: scenes.map(s => ({ id: s.id, name: s.name, stack: s.stack.map(serStackItem), stackIdx: s.stackIdx })),
     currentSceneIdx,
     customShortcuts,
     pads: pads.map(p => ({ id: p.id, key: p.key, name: p.name, loop: p.loop, vol: p.vol, fadeEnabled: p.fadeEnabled, color: p.color, hasAudio: !!p.file, inPoint: p.inPoint ?? null, outPoint: p.outPoint ?? null })),
@@ -2903,6 +3216,7 @@ function restoreSessionData(data) {
   if (!data) return;
   masterVol       = data.masterVol    ?? 1;
   autoAdv         = data.autoAdv      ?? false;
+  autoSelect      = data.autoSelect   ?? false;
   stopFadeGlobal         = data.stopFadeGlobal ?? false;
   fadeInGlobal    = data.fadeInGlobal ?? true;
   fadeDuration    = data.fadeDuration ?? 2;
@@ -2933,11 +3247,12 @@ function restoreSessionData(data) {
   if (data.scenes) {
     scenes = data.scenes.map(s => ({
       id: s.id, name: s.name,
-      stack:    (s.stack || []).map(padId => ({ padId })),
+      stack:    deserStack(s.stack),
       stackIdx: s.stackIdx ?? -1,
     }));
     sceneIdSeq      = scenes.reduce((m, s) => Math.max(m, s.id + 1), 0);
     currentSceneIdx = Math.min(data.currentSceneIdx ?? 0, scenes.length - 1);
+    bumpStackSidSeq();
   }
 
   customShortcuts = data.customShortcuts ?? [];
@@ -2948,7 +3263,7 @@ function restoreSessionData(data) {
   document.getElementById('fadeInDurInput').value = fadeInDuration;
   updateStopFadeBtn();
   updateFadeInBtn();
-  document.getElementById('autoToggle').className = `toggle-sw${autoAdv ? ' on' : ''}`;
+  updateAutoToggles();
   applyScales();
   buildPads();
   renderSceneTabs();
@@ -3010,6 +3325,8 @@ if (typeof window !== 'undefined' && window.electronAPI?.onApiCommand) {
       if (pad?.file) togglePadCrossfade(cmd.id);
     }
     if (cmd.type === 'stop_all') stopAll();
+    if (cmd.type === 'play_cue') playCue();
+    if (cmd.type === 'next_cue') nextCue();
   });
 
   // Stream Deck plugin just connected – send full state immediately
@@ -3078,13 +3395,23 @@ async function doSaveProjectIDB(name) {
       } catch (e) { console.warn('Could not read audio for pad', p.id, e); }
     }
   }
+  // Standalone stack MP3s
+  for (const sc of scenes) {
+    for (const it of sc.stack) {
+      if (!isStandalone(it) || !it.file) continue;
+      try {
+        const buf = await it.file.arrayBuffer();
+        audioData['stack:' + it.sid] = { name: it.file.name, type: it.file.type, buf };
+      } catch (e) { console.warn('Could not read stack audio', it.sid, e); }
+    }
+  }
 
   const config = {
     name, version: 4, savedAt: Date.now(),
-    masterVol, autoAdv, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
+    masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
     scenes: scenes.map(s => ({
       id: s.id, name: s.name,
-      stack: s.stack.map(i => i.padId), stackIdx: s.stackIdx
+      stack: s.stack.map(serStackItem), stackIdx: s.stackIdx
     })),
     currentSceneIdx, customShortcuts,
     pads: pads.map(p => ({
@@ -3157,7 +3484,7 @@ async function loadProjectIDB(name) {
   if (config.scenes) {
     scenes = config.scenes.map(s => ({
       id: s.id, name: s.name,
-      stack: (s.stack || []).map(padId => ({ padId })),
+      stack: deserStack(s.stack),
       stackIdx: s.stackIdx ?? -1
     }));
     sceneIdSeq      = scenes.reduce((m, s) => Math.max(m, s.id + 1), 0);
@@ -3166,8 +3493,20 @@ async function loadProjectIDB(name) {
     scenes = [{ id: 0, name: 'Scene 1', stack: [], stackIdx: -1 }];
     sceneIdSeq = 1; currentSceneIdx = 0;
   }
+  bumpStackSidSeq();
+  // Restore standalone stack MP3s from audioData "stack:<sid>" entries.
+  for (const sc of scenes) {
+    for (const it of sc.stack) {
+      if (!isStandalone(it)) continue;
+      const ad = (audioData || {})['stack:' + it.sid];
+      if (!ad) continue;
+      try { attachStandaloneAudio(it, new File([ad.buf], ad.name, { type: ad.type })); }
+      catch (e) { console.warn('Could not restore stack audio', it.sid, e); }
+    }
+  }
 
   autoAdv         = config.autoAdv      ?? false;
+  autoSelect      = config.autoSelect   ?? false;
   stopFadeGlobal         = config.stopFadeGlobal ?? false;
   fadeInGlobal    = config.fadeInGlobal ?? true;
   masterVol       = config.masterVol    ?? 1;
@@ -3183,7 +3522,7 @@ async function loadProjectIDB(name) {
   document.getElementById('fadeInDurInput').value   = fadeInDuration;
   updateStopFadeBtn();
   updateFadeInBtn();
-  document.getElementById('autoToggle').className = `toggle-sw${autoAdv ? ' on' : ''}`;
+  updateAutoToggles();
   applyScales();
   buildPads(); renderSceneTabs(); renderStack();
   localStorage.removeItem('cue-autosave');

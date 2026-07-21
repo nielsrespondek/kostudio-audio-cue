@@ -1,9 +1,10 @@
 /**
  * Kostudio Audio Cue – Stream Deck Plugin
  *
- * Enthält zwei Aktionen:
+ * Enthält drei Aktionen:
  *   com.kostudio.audiocue.padcontrol  – steuert ein einzelnes Pad
  *   com.kostudio.audiocue.stopall     – stoppt alle Pads (= Escape in Kostudio)
+ *   com.kostudio.audiocue.cuecontrol  – Play/Stop des ausgewählten Cues (= PLAY CUE)
  *
  * Beim Installieren aktiviert das Plugin automatisch das mitgelieferte
  * "Kostudio Audio Cue"-Profil mit 12 Pad-Buttons + 1 Stop-All-Button.
@@ -28,9 +29,11 @@ const REG_EVENT   = args.registerEvent;
 // ── State ─────────────────────────────────────────────────
 const padInstances  = new Map();
 const stopInstances = new Set();
+const cueInstances  = new Set();
 let   firstDevice     = null;
 let   firstDeviceType = 0;
 let   padState        = [];
+let   cueState        = { hasSelection: false, playing: false, name: '' };
 let   kosConnected    = false;
 
 // ── Stream Deck WebSocket ─────────────────────────────────
@@ -104,6 +107,9 @@ sdWS.on('message', (raw) => {
         const img = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
         sdSend({ event: 'setTitle', context: ctx, payload: { title: '', target: 0 } });
         sdSend({ event: 'setImage', context: ctx, payload: { image: img, target: 0 } });
+      } else if (uuid === 'com.kostudio.audiocue.cuecontrol') {
+        cueInstances.add(ctx);
+        updateCueButton(ctx);
       }
       break;
     }
@@ -111,6 +117,7 @@ sdWS.on('message', (raw) => {
     case 'willDisappear': {
       padInstances.delete(msg.context);
       stopInstances.delete(msg.context);
+      cueInstances.delete(msg.context);
       break;
     }
 
@@ -136,6 +143,8 @@ sdWS.on('message', (raw) => {
 
       } else if (uuid === 'com.kostudio.audiocue.stopall') {
         kostudioCommand({ type: 'stop_all' });
+      } else if (uuid === 'com.kostudio.audiocue.cuecontrol') {
+        kostudioCommand({ type: 'play_cue' });
       }
       break;
     }
@@ -230,6 +239,53 @@ function updateAllButtons() {
   for (const [ctx, padId] of padInstances) updatePadButton(ctx, padId);
 }
 
+// ── Cue Play/Stop button ──────────────────────────────────
+function makeCueSvg(name, color, label) {
+  const words = (name || '').split(' ');
+  let line1 = '', line2 = '';
+  for (const w of words) {
+    if ((line1 + ' ' + w).trim().length <= 11) line1 = (line1 + ' ' + w).trim();
+    else line2 = (line2 + ' ' + w).trim();
+  }
+  if (line2.length > 12) line2 = line2.substring(0, 11) + '…';
+
+  const tag = `<text x="72" y="22" font-family="system-ui,sans-serif" font-size="15" font-weight="700" text-anchor="middle" fill="rgba(255,255,255,0.5)">${label}</text>`;
+  const textY = line2 ? '78' : '86';
+  const block = line2
+    ? `<text x="72" y="${textY}" font-family="system-ui,sans-serif" font-size="20" font-weight="700" text-anchor="middle" fill="#fff">${line1}</text>
+       <text x="72" y="${parseInt(textY)+24}" font-family="system-ui,sans-serif" font-size="20" font-weight="700" text-anchor="middle" fill="#fff">${line2}</text>`
+    : `<text x="72" y="${textY}" font-family="system-ui,sans-serif" font-size="22" font-weight="700" text-anchor="middle" fill="#fff">${line1}</text>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144">
+  <rect width="144" height="144" rx="16" fill="${color}"/>
+  ${tag}
+  ${block}
+</svg>`;
+  return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+}
+
+function escXml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function updateCueButton(ctx) {
+  let color, label, name;
+  if (!cueState.hasSelection) {
+    color = COLOR.empty;  label = 'CUE';  name = '—';
+  } else if (cueState.playing) {
+    color = COLOR.playing; label = '■ STOP'; name = escXml(cueState.name || '');
+  } else {
+    color = COLOR.stopped; label = '▶ PLAY'; name = escXml(cueState.name || '');
+  }
+  sdSend({ event: 'setTitle', context: ctx, payload: { title: '', target: 0 } });
+  sdSend({ event: 'setImage', context: ctx, payload: { image: makeCueSvg(name, color, label), target: 0 } });
+  sdSend({ event: 'setState', context: ctx, payload: { state: cueState.playing ? 1 : 0 } });
+}
+
+function updateAllCueButtons() {
+  for (const ctx of cueInstances) updateCueButton(ctx);
+}
+
 // ── Kostudio SSE connection ───────────────────────────────
 
 const RETRY_MS = 3000;
@@ -257,7 +313,9 @@ function connectToKostudio() {
               const msg = JSON.parse(line.slice(6));
               if (msg.type === 'pads' && Array.isArray(msg.pads)) {
                 padState = msg.pads;
+                if (msg.cue) cueState = msg.cue;
                 updateAllButtons();
+                updateAllCueButtons();
               }
             } catch { /* ignore */ }
           }
