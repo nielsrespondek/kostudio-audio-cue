@@ -1,13 +1,12 @@
 {
   "name": "kostudio-audio-cue",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Kostudio Audio Cue — Live Performance Sound Manager",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dist-win": "electron-builder --win --publish never",
     "dist-mac": "electron-builder --mac --publish never",
-    "predist-streamdeck": "npm install --omit=dev --no-audit --no-fund --prefix streamdeck-plugin",
     "dist-streamdeck": "powershell -Command \"New-Item -ItemType Directory -Force -Path dist | Out-Null; Copy-Item streamdeck-plugin com.kostudio.audiocue.sdPlugin -Recurse -Force; Compress-Archive -Path .\\\\com.kostudio.audiocue.sdPlugin -DestinationPath .\\\\dist\\\\Kostudio-Audio-Cue.zip -Force; Rename-Item .\\\\dist\\\\Kostudio-Audio-Cue.zip Kostudio-Audio-Cue.streamDeckPlugin -Force; Remove-Item com.kostudio.audiocue.sdPlugin -Recurse -Force; Write-Host 'Done: dist/Kostudio-Audio-Cue.streamDeckPlugin'\"",
     "dist-all": "npm run dist-win && npm run dist-streamdeck"
   },

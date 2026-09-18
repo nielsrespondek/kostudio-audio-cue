@@ -30,6 +30,10 @@ jobs:
       - name: Build Windows portable .exe
         run: npm run dist-win
 
+      - name: Install Stream Deck plugin dependencies
+        working-directory: streamdeck-plugin
+        run: npm install --omit=dev --no-audit --no-fund
+
       - name: Build Stream Deck plugin
         run: npm run dist-streamdeck
 
