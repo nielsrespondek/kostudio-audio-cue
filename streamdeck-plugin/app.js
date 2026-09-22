@@ -8,6 +8,12 @@
  *
  * Beim Installieren aktiviert das Plugin automatisch das mitgelieferte
  * "Kostudio Audio Cue"-Profil mit 12 Pad-Buttons + 1 Stop-All-Button.
+ *
+ * Layout-Spiegelung: Ein Pad-Button ohne fest gewaehltes Pad folgt seiner
+ * Position – Taste (Zeile, Spalte) steuert Pad Zeile*Spalten+Spalte. Das
+ * Plugin meldet das Tastenraster an Kostudio (sd_layout), die App stellt
+ * ihr Pad-Raster auf dieselbe Spaltenzahl. So liegt jedes Pad auf dem
+ * Stream Deck an derselben Stelle wie im Programm.
  */
 
 'use strict';
@@ -27,7 +33,8 @@ const PLUGIN_UUID = args.pluginUUID;
 const REG_EVENT   = args.registerEvent;
 
 // ── State ─────────────────────────────────────────────────
-const padInstances  = new Map();
+const padInstances  = new Map();   // ctx → { padId, fixed, coords, device }
+const deviceSizes   = new Map();   // device → { columns, rows }
 const stopInstances = new Set();
 const cueInstances  = new Set();
 let   firstDevice     = null;
@@ -55,6 +62,10 @@ sdWS.on('message', (raw) => {
 
     // ── Device connected → Global Settings prüfen ────────────
     case 'deviceDidConnect': {
+      const size = msg.deviceInfo?.size;
+      if (size?.columns && size?.rows) deviceSizes.set(msg.device, { columns: size.columns, rows: size.rows });
+      updateAllButtons();
+      scheduleLayoutSend();
       if (!firstDevice) {
         firstDevice     = msg.device;
         firstDeviceType = msg.deviceInfo?.type ?? 0;
@@ -92,11 +103,10 @@ sdWS.on('message', (raw) => {
     case 'willAppear': {
       const ctx    = msg.context;
       const uuid   = msg.action;
-      const padId  = msg.payload?.settings?.padId ?? null;
-
       if (uuid === 'com.kostudio.audiocue.padcontrol') {
-        padInstances.set(ctx, padId);
-        updatePadButton(ctx, padId);
+        padInstances.set(ctx, makeInstance(msg));
+        updatePadButton(ctx);
+        scheduleLayoutSend();
       } else if (uuid === 'com.kostudio.audiocue.stopall') {
         stopInstances.add(ctx);
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144">
@@ -115,7 +125,7 @@ sdWS.on('message', (raw) => {
     }
 
     case 'willDisappear': {
-      padInstances.delete(msg.context);
+      if (padInstances.delete(msg.context)) scheduleLayoutSend();
       stopInstances.delete(msg.context);
       cueInstances.delete(msg.context);
       break;
@@ -123,11 +133,11 @@ sdWS.on('message', (raw) => {
 
     // ── Settings saved in property inspector ──────────────
     case 'didReceiveSettings': {
-      const ctx   = msg.context;
-      const padId = msg.payload?.settings?.padId ?? null;
-      if (padInstances.has(ctx) || padId != null) {
-        padInstances.set(ctx, padId);
-        updatePadButton(ctx, padId);
+      const ctx = msg.context;
+      if (msg.action === 'com.kostudio.audiocue.padcontrol') {
+        padInstances.set(ctx, makeInstance(msg));
+        updatePadButton(ctx);
+        scheduleLayoutSend();
       }
       break;
     }
@@ -138,7 +148,8 @@ sdWS.on('message', (raw) => {
       const uuid = msg.action;
 
       if (uuid === 'com.kostudio.audiocue.padcontrol') {
-        const padId = padInstances.get(ctx);
+        const inst  = padInstances.get(ctx);
+        const padId = inst ? effectivePadId(inst) : null;
         if (padId != null) kostudioCommand({ type: 'toggle', id: padId });
 
       } else if (uuid === 'com.kostudio.audiocue.stopall') {
@@ -151,13 +162,17 @@ sdWS.on('message', (raw) => {
 
     // ── Property inspector communication ──────────────────
     case 'sendToPlugin': {
-      const ctx   = msg.context;
-      const padId = msg.payload?.padId ?? null;
+      const ctx  = msg.context;
+      const pick = msg.payload?.padId;
 
-      if (padId != null) {
-        padInstances.set(ctx, padId);
-        sdSend({ event: 'setSettings', context: ctx, payload: { padId } });
-        updatePadButton(ctx, padId);
+      // Property inspector choice: 'auto' = follow key position, number = fixed pad
+      if (pick != null && padInstances.has(ctx)) {
+        const inst = padInstances.get(ctx);
+        if (pick === 'auto') { inst.fixed = false; inst.padId = null; }
+        else                 { inst.fixed = true;  inst.padId = parseInt(pick, 10); }
+        sdSend({ event: 'setSettings', context: ctx, payload: { padId: inst.padId, fixed: inst.fixed } });
+        updatePadButton(ctx);
+        scheduleLayoutSend();
       }
 
       // Always send current pad list + connection status to property inspector
@@ -165,7 +180,7 @@ sdWS.on('message', (raw) => {
         event:   'sendToPropertyInspector',
         context: ctx,
         action:  'com.kostudio.audiocue.padcontrol',
-        payload: { pads: padState, kostudioConnected: kosConnected },
+        payload: { pads: padState, kostudioConnected: kosConnected, ...piInfo(ctx) },
       });
       break;
     }
@@ -210,7 +225,9 @@ function makePadSvg(name, color, padNum) {
   return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
 }
 
-function updatePadButton(ctx, padId) {
+function updatePadButton(ctx) {
+  const inst  = padInstances.get(ctx);
+  const padId = inst ? effectivePadId(inst) : null;
   if (padId == null) {
     sdSend({ event: 'setTitle', context: ctx, payload: { title: '', target: 0 } });
     sdSend({ event: 'setImage', context: ctx, payload: { image: makePadSvg('—', COLOR.empty, ''), target: 0 } });
@@ -228,7 +245,7 @@ function updatePadButton(ctx, padId) {
   else if (pad.paused)         color = COLOR.paused;
   else                         color = COLOR.stopped;
 
-  const displayName = (!pad || !pad.hasFile) ? `Pad ${num}` : name;
+  const displayName = escXml((!pad || !pad.hasFile) ? `Pad ${num}` : name);
 
   sdSend({ event: 'setTitle', context: ctx, payload: { title: '', target: 0 } });
   sdSend({ event: 'setImage', context: ctx, payload: { image: makePadSvg(displayName, color, num), target: 0 } });
@@ -236,7 +253,54 @@ function updatePadButton(ctx, padId) {
 }
 
 function updateAllButtons() {
-  for (const [ctx, padId] of padInstances) updatePadButton(ctx, padId);
+  for (const ctx of padInstances.keys()) updatePadButton(ctx);
+}
+
+// ── Position mapping ────────────────────────────────────────────────
+// Settings aus aelteren Versionen haben nur padId (ohne fixed) → gelten als
+// "automatisch", damit das mitgelieferte Profil sofort das App-Raster spiegelt.
+function makeInstance(msg) {
+  const s = msg.payload?.settings || {};
+  return {
+    padId:  s.padId ?? null,
+    fixed:  s.fixed === true,
+    coords: msg.payload?.isInMultiAction ? null : (msg.payload?.coordinates || null),
+    device: msg.device,
+  };
+}
+
+function positionPadId(inst) {
+  const size = deviceSizes.get(inst.device);
+  if (!inst.coords || !size) return null;
+  return inst.coords.row * size.columns + inst.coords.column;
+}
+
+function effectivePadId(inst) {
+  if (inst.fixed) return inst.padId;
+  const pos = positionPadId(inst);
+  return pos != null ? pos : inst.padId;   // Multi-Action: kein Positionsbezug
+}
+
+function piInfo(ctx) {
+  const inst = padInstances.get(ctx);
+  if (!inst) return {};
+  return { fixed: inst.fixed, padId: inst.padId, autoPadId: positionPadId(inst) };
+}
+
+// Tastenraster + belegte Pads an Kostudio melden (App passt ihr Raster an)
+let layoutTimer = null;
+function scheduleLayoutSend() {
+  clearTimeout(layoutTimer);
+  layoutTimer = setTimeout(sendLayoutToKostudio, 200);
+}
+function sendLayoutToKostudio() {
+  if (!kosConnected) return;
+  const size = deviceSizes.get(firstDevice) || deviceSizes.values().next().value;
+  if (!size) return;
+  const mapped = [...new Set(
+    [...padInstances.values()].map(effectivePadId).filter(id => id != null)
+  )];
+  kostudioCommand({ type: 'sd_layout', columns: size.columns, rows: size.rows, mapped });
 }
 
 // ── Cue Play/Stop button ──────────────────────────────────
@@ -300,6 +364,7 @@ function connectToKostudio() {
     }
 
     kosConnected = true;
+    scheduleLayoutSend();
 
     let buffer = '';
     res.on('data', (chunk) => {

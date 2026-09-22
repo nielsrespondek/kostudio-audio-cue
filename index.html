@@ -30,6 +30,7 @@
   --header-h: 47px;
   --pads-scale: 1;
   --stack-text-scale: 1;
+  --grid-cols: 4;
 }
 
 html[data-theme="light"] {
@@ -213,7 +214,7 @@ main {
 .pads-section { flex: 1; min-height: 0; padding: 14px; overflow-y: auto; }
 .pads-grid {
   display: grid;
-  grid-template-columns: repeat(4,1fr);
+  grid-template-columns: repeat(var(--grid-cols, 4), 1fr);
   gap: 10px;
   zoom: var(--pads-scale);
   /* width is set dynamically by JS in updateGridWidth() so that
@@ -227,8 +228,8 @@ main {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px;
-  min-height: 130px;
+  padding: 8px;
+  min-height: 70px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -250,6 +251,36 @@ main {
 .pad.loaded  { border-color: var(--c); }
 .pad.playing { border-color: var(--c); box-shadow: 0 0 18px var(--c); }
 .pad.drag-over { border-color: var(--accent) !important; box-shadow: 0 0 12px rgba(0,212,255,.4); }
+.pad.pad-dragging    { opacity: .35; }
+.pad.pad-drop-target { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.pad.sd-outside      { border-style: dashed; }
+
+/* Compact pad rows */
+.pad-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pad-name-row .pad-name { min-width: 0; }
+.pad-name-row .pad-time { min-width: 0; font-size: 10px; }
+.pad-time.running { color: var(--c); font-weight: 700; }
+.pad-bar-row  { display: flex; align-items: center; gap: 4px; }
+.pad-bar-row > .pad-progress { flex: 1; width: auto; min-width: 20px; }
+.pad-ico {
+  width: 24px; height: 26px; flex-shrink: 0; padding: 0;
+  border: 1px solid var(--border); border-radius: 5px;
+  background: transparent; color: var(--muted);
+  font-size: 12px; line-height: 1; cursor: pointer; transition: all .15s;
+}
+.pad-ico:hover           { border-color: var(--accent); color: var(--accent); }
+.pad-ico.loop-on         { border-color: var(--loop-col); color: var(--loop-col); background: rgba(255,153,0,.08); }
+.pad-ico.fade-on         { border-color: var(--fade-col); color: var(--fade-col); background: rgba(170,102,255,.08); }
+.pad-ico.clear-pad:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Stack: resize handle + drag & drop */
+.stack-resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 20; transition: background .15s; }
+.stack-resizer:hover, .stack-resizer.dragging { background: var(--accent); opacity: .45; }
+.stack-item.dragging    { opacity: .35; }
+.stack-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.stack-item.drop-after  { box-shadow: inset 0 -2px 0 var(--accent); }
+.stack-list.pad-drop    { outline: 2px dashed var(--accent); outline-offset: -4px; }
+.sd-info { color: var(--accent); font-weight: 600; white-space: nowrap; }
 
 .pad-top {
   display: flex;
@@ -847,7 +878,7 @@ kbd {
 .pad-add-tile {
   border: 2px dashed var(--border);
   border-radius: 8px;
-  min-height: 130px;
+  min-height: 70px;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   gap: 6px;
@@ -909,13 +940,17 @@ kbd {
 .pad-transport {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  flex-wrap: wrap;
   position: relative;
   z-index: 1;
 }
 .transport-pp {
   flex: 1;
-  height: 36px;
+  min-width: 30px;
+  overflow: hidden;
+  white-space: nowrap;
+  height: 26px;
   background: rgba(255,255,255,.05);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -943,8 +978,8 @@ kbd {
   background: rgba(255,255,255,.04);
 }
 .transport-stop {
-  width: 36px;
-  height: 36px;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
   background: transparent;
   border: 1px solid var(--border);
@@ -1182,6 +1217,7 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
 
   /* --- Show the handle --- */
   .stack-handle { display: flex; }
+  .stack-resizer { display: none; }
 
   /* --- Collapsed: only handle + foot buttons --- */
   .stack-panel.collapsed .stack-head,
@@ -1226,6 +1262,7 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
   <button class="hdr-btn save" onclick="handleSave()">💾 Save</button>
   <button class="hdr-btn save" onclick="handleSaveAs()">💾 Save As</button>
   <button class="hdr-btn"      onclick="handleLoad()">📂 Load</button>
+  <button class="hdr-btn"      onclick="pickFilesForPads()" title="Choose several audio files — they go into the empty pads in name order (new pads are added if needed)">🎵 Fill Pads</button>
   <button class="hdr-btn"      onclick="showShortcutsModal()">⌨ Shortcuts</button>
 <button class="theme-btn"    onclick="toggleTheme()" id="themeBtn">DARK MODE</button>
   <div class="header-right">
@@ -1263,6 +1300,7 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
 </div><!-- #appWrap -->
 
 <div class="stack-panel" id="stackPanel">
+  <div class="stack-resizer" id="stackResizer" title="Drag to resize — double-click to reset"></div>
   <div class="stack-handle" onclick="toggleStackDrawer()" title="Show / hide cue list">
     <div class="stack-handle-pip"></div>
   </div>
@@ -1300,6 +1338,13 @@ html[data-theme="light"] header { background: linear-gradient(90deg,#ffffff 0%,#
     <span class="scale-val" id="padsScaleVal">100%</span>
     <button class="scale-btn" onclick="adjustPadsScale(0.05)" title="Zoom in pads">+</button>
   </div>
+  <div class="scale-wrap" title="Pad columns — matched automatically when a Stream Deck connects">
+    <span class="scale-lbl">COLS</span>
+    <button class="scale-btn" onclick="adjustGridCols(-1)" title="Fewer columns">−</button>
+    <span class="scale-val" id="gridColsVal">4</span>
+    <button class="scale-btn" onclick="adjustGridCols(1)" title="More columns">+</button>
+  </div>
+  <span class="sd-info" id="sdInfo" title="Stream Deck layout — pad grid mirrors the keys"></span>
   <div class="tips">
     <div class="tip"><kbd>KEY</kbd> play</div>
     <div class="tip"><kbd>SPACE</kbd> play cue</div>
@@ -1338,7 +1383,8 @@ const COLORS = [
 const DEFAULT_KEYS = ['1','2','3','4','5','6','7','8','q','w','e','r'];
 
 // ── State ─────────────────────────────────────────────────
-let pads = DEFAULT_KEYS.map((key, i) => ({
+const START_PADS = 32;   // pads on a fresh start (projects keep their own count)
+let pads = Array.from({ length: START_PADS }, (_, i) => DEFAULT_KEYS[i] ?? '').map((key, i) => ({
   id: i, key,
   color:       COLORS[i % COLORS.length],
   name:        '',
@@ -1399,6 +1445,10 @@ function broadcastPadState() {
 }
 let padsScale       = 1.0;
 let stackScale      = 1.0;
+let gridCols        = 4;      // pad grid columns (auto-matched to a connected Stream Deck)
+let sdLayout        = null;   // { columns, rows, mapped:[padIds] } reported by the Stream Deck plugin
+let _dragPadId      = null;   // pad being dragged (reorder, or drop into the stack)
+let _dragStackIdx   = null;   // stack item being dragged
 let capturing       = null;
 let db              = null;
 let customShortcuts = [];
@@ -1447,6 +1497,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   applyScales();
   initTouchLayout();
+  initStackResizer();
+  initStackDnD();
   checkAutosave();
   updateFadeInBtn();
 });
@@ -1941,6 +1993,36 @@ function moveStackItem(i, dir) {
   scheduleAutosave();
 }
 
+// Drag & drop reorder: `to` is the insertion index in the current array (0..length).
+function moveStackItemTo(from, to) {
+  const s = getScene();
+  if (from < 0 || from >= s.stack.length) return;
+  if (to > from) to--;
+  to = Math.max(0, Math.min(to, s.stack.length - 1));
+  if (to === from) return;
+  const sel = s.stack[s.stackIdx];
+  const [it] = s.stack.splice(from, 1);
+  s.stack.splice(to, 0, it);
+  if (sel) s.stackIdx = s.stack.indexOf(sel);
+  renderStack();
+  scheduleAutosave();
+  scheduleBroadcast();
+}
+
+// Pad dragged from the grid into the stack at a given position.
+function insertPadIntoStack(padId, at) {
+  const pad = pads[padId];
+  if (!pad?.file) { setStatus('Load audio into the pad first'); return; }
+  const s = getScene();
+  at = Math.max(0, Math.min(at, s.stack.length));
+  s.stack.splice(at, 0, { padId });
+  if (s.stackIdx >= at) s.stackIdx++;
+  renderStack();
+  scheduleAutosave();
+  scheduleBroadcast();
+  setStatus(`"${pad.name}" added to stack (#${at + 1})`);
+}
+
 function removeFromStack(i) {
   const s = getScene();
   const gone = s.stack[i];
@@ -2061,34 +2143,34 @@ function renderStack() {
   const s    = getScene();
   const list = document.getElementById('stackList');
   if (!s.stack.length) {
-    list.innerHTML = '<div class="stack-empty">Use <strong>+ Stack</strong> on any loaded pad,<br>or <strong>+ MP3</strong> below to load songs directly<br>into this cue sequence</div>';
+    list.innerHTML = '<div class="stack-empty">Drag a pad here or use <strong>+</strong> on a pad,<br>or <strong>+ MP3</strong> above to load songs directly<br>into this cue sequence</div>';
     updatePlayCueBtn();
     return;
   }
   list.innerHTML = s.stack.map((item, i) => {
     const active = i === s.stackIdx;
     if (isStandalone(item)) {
-      return `<div class="stack-item stack-item-mp3${active ? ' active' : ''}" onclick="playStackItem(${i})">
+      return `<div class="stack-item stack-item-mp3${active ? ' active' : ''}" draggable="true" data-si="${i}" onclick="playStackItem(${i})">
         <span class="stack-n">${i + 1}</span>
         <div class="stack-dot stack-dot-mp3" title="MP3 loaded directly into the stack">♪</div>
         <div class="stack-move">
           <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},-1)" ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
           <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},1)" ${i === s.stack.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
         </div>
-        <span class="stack-lbl">${escHtml(item.name || 'Unnamed')}</span>
+        <span class="stack-lbl" title="${escHtml(item.name || 'Unnamed')}">${escHtml(item.name || 'Unnamed')}</span>
         <span class="stack-rt" id="stack-rt-${i}"></span>
         <span class="stack-rm" onclick="event.stopPropagation();removeFromStack(${i})">×</span>
       </div>`;
     }
     const pad = pads[item.padId];
-    return `<div class="stack-item${active ? ' active' : ''}" onclick="playStackItem(${i})">
+    return `<div class="stack-item${active ? ' active' : ''}" draggable="true" data-si="${i}" onclick="playStackItem(${i})">
       <span class="stack-n">${i + 1}</span>
       <div class="stack-dot" style="background:${pad.color}"></div>
       <div class="stack-move">
         <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},-1)" ${i === 0 ? 'disabled' : ''} title="Move up">▲</button>
         <button class="stack-move-btn" onclick="event.stopPropagation();moveStackItem(${i},1)" ${i === s.stack.length - 1 ? 'disabled' : ''} title="Move down">▼</button>
       </div>
-      <span class="stack-lbl">${escHtml(pad.name || 'Unnamed')}</span>
+      <span class="stack-lbl" title="${escHtml(pad.name || 'Unnamed')}">${escHtml(pad.name || 'Unnamed')}</span>
       <span class="stack-rt" id="stack-rt-${i}"></span>
       <span class="stack-rm" onclick="event.stopPropagation();removeFromStack(${i})">×</span>
     </div>`;
@@ -2154,6 +2236,11 @@ function renderSceneTabs() {
 function buildPads() {
   const grid = document.getElementById('padsGrid');
   grid.innerHTML = '';
+  // Per-pad volume was removed from the UI — normalise older projects so no
+  // pad stays stuck at a volume that can no longer be changed.
+  pads.forEach(p => {
+    if (p.vol !== 1) { p.vol = 1; if (p.audio && !fadeTimers[p.id]) p.audio.volume = masterVol; }
+  });
   pads.forEach(p => {
     const el = document.createElement('div');
     el.id = `pad${p.id}`;
@@ -2177,13 +2264,59 @@ function addPad() {
   scheduleAutosave();
 }
 
+// ── Bulk fill: many audio files → empty pads ──────────────
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|webm)$/i;
+function sortAudioFiles(files) {
+  return Array.from(files || [])
+    .filter(f => (f.type || '').startsWith('audio/') || AUDIO_EXT.test(f.name))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+}
+function newPad(id) {
+  return { id, key: '', color: COLORS[id % COLORS.length], name: '', file: null, audio: null, filePath: null,
+           loop: false, playing: false, paused: false, vol: 1.0, fadeEnabled: false, inPoint: null, outPoint: null };
+}
+// Empty = no audio and no remembered name (a named pad without audio waits for its own file).
+function isEmptyPad(p) { return !p.file && !p.name; }
+
+function pickFilesForPads() {
+  const inp = Object.assign(document.createElement('input'), { type: 'file', accept: 'audio/*', multiple: true });
+  inp.style.cssText = 'position:fixed;top:-200px;left:-200px;opacity:0;pointer-events:none;';
+  document.body.appendChild(inp);
+  inp.addEventListener('change', () => {
+    fillPadsFrom(inp.files);
+    try { document.body.removeChild(inp); } catch {}
+  });
+  inp.click();
+}
+
+// startId given (several files dropped on one pad): the first file goes into that
+// pad, the rest into the following empty pads. Without startId: all into empty pads from the top.
+function fillPadsFrom(fileList, startId = null) {
+  const files = sortAudioFiles(fileList);
+  if (!files.length) { setStatus('No audio files selected'); return; }
+  let i = 0, idx = 0, grew = 0;
+  if (startId != null) { loadFile(startId, files[i++]); idx = startId + 1; }
+  for (; i < files.length; i++) {
+    while (idx < pads.length && !isEmptyPad(pads[idx])) idx++;
+    if (idx >= pads.length) { pads.push(newPad(pads.length)); grew++; }
+    loadFile(idx, files[i]);
+    idx++;
+  }
+  if (grew) buildPads();
+  const skipped = Array.from(fileList || []).length - files.length;
+  setStatus(`${files.length} file${files.length !== 1 ? 's' : ''} loaded into pads`
+    + (grew ? ` — ${grew} new pad${grew !== 1 ? 's' : ''} added` : '')
+    + (skipped ? ` — ${skipped} non-audio file${skipped !== 1 ? 's' : ''} skipped` : ''));
+}
+
 function refreshPadEl(el, pad) {
-  el.className = ['pad', pad.file ? 'loaded' : '', pad.playing ? 'playing' : ''].filter(Boolean).join(' ');
+  const sdOut = !!(sdLayout && sdLayout.mapped.length && !sdLayout.mapped.includes(pad.id));
+  el.className = ['pad', pad.file ? 'loaded' : '', pad.playing ? 'playing' : '', sdOut ? 'sd-outside' : ''].filter(Boolean).join(' ');
   el.style.setProperty('--c', pad.color);
 
   const capClass  = capturing === pad.id ? ' capturing' : '';
   const keyLabel  = capturing === pad.id ? '…' : (pad.key ? escHtml(pad.key.toUpperCase()) : '—');
-  const emptyLabel = IS_TOUCH ? 'Tap to load audio' : 'Click or drop file';
+  const emptyLabel = IS_TOUCH ? 'Tap to load audio' : 'Click or drop file(s)';
   const nameLabel = pad.file ? escHtml(pad.name) : (pad.name ? `${escHtml(pad.name)} ⚠` : emptyLabel);
   const nameClass = pad.file ? '' : (pad.name ? ' needs-audio' : ' empty');
   const volPct    = Math.round(pad.vol * 100);
@@ -2199,50 +2332,34 @@ function refreshPadEl(el, pad) {
         <div class="shortcut-key${capClass}" data-action="capture">${keyLabel}</div>
       </div>
       <div class="pad-right-col">
-        <div class="pad-name${nameClass}" id="pname${pad.id}">${nameLabel}</div>
-        <div class="pad-progress" id="pbar${pad.id}">
-          <div class="pad-prog-fill" id="prog${pad.id}"></div>
-          <div class="prog-active-zone" id="pzone${pad.id}"></div>
-          <div class="prog-in-marker"  id="pin${pad.id}"></div>
-          <div class="prog-out-marker" id="pout${pad.id}"></div>
+        <div class="pad-name-row">
+          <div class="pad-name${nameClass}" id="pname${pad.id}">${nameLabel}</div>
+          ${pad.file ? `<span class="pad-time" id="ptime${pad.id}">--:--</span>` : ''}
         </div>
         ${pad.file ? `
-        <div class="inout-row">
+        <div class="pad-bar-row">
           <button class="inout-btn${inSet ? ' set' : ''}" data-action="set-in"
-                  title="${inSet ? 'Click to reset IN point' : 'Set IN point at current position'}">
-            ▶ ${inSet ? fmt(pad.inPoint) : 'IN'}
-          </button>
-          <div class="inout-spacer"></div>
-          <span class="pad-time" id="ptime${pad.id}">--:-- / --:--</span>
-          <div class="inout-spacer"></div>
+                  title="${inSet ? 'Click to reset IN point' : 'Set IN point at current position'}">▶ ${inSet ? fmt(pad.inPoint) : 'IN'}</button>
+          <div class="pad-progress" id="pbar${pad.id}">
+            <div class="pad-prog-fill" id="prog${pad.id}"></div>
+            <div class="prog-active-zone" id="pzone${pad.id}"></div>
+            <div class="prog-in-marker"  id="pin${pad.id}"></div>
+            <div class="prog-out-marker" id="pout${pad.id}"></div>
+          </div>
           <button class="inout-btn${outSet ? ' set' : ''}" data-action="set-out"
-                  title="${outSet ? 'Click to reset OUT point' : 'Set OUT point at current position'}">
-            ${outSet ? fmt(pad.outPoint) : 'OUT'} ◼
-          </button>
+                  title="${outSet ? 'Click to reset OUT point' : 'Set OUT point at current position'}">${outSet ? fmt(pad.outPoint) : 'OUT'} ◼</button>
         </div>
         <div class="pad-transport">
-          <button class="transport-pp${pad.playing ? ' is-playing' : pad.paused ? ' is-paused' : ''}" data-action="playpause">
+          <button class="transport-pp${pad.playing ? ' is-playing' : pad.paused ? ' is-paused' : ''}" data-action="playpause" title="Play / Pause">
             <span class="t-icon">${pad.playing ? '⏸' : '▶'}</span>
-            <span>${pad.playing ? 'PAUSE' : pad.paused ? 'RESUME' : 'PLAY'}</span>
+            <span class="t-lbl">${pad.playing ? 'PAUSE' : pad.paused ? 'RESUME' : 'PLAY'}</span>
           </button>
           <button class="transport-stop" data-action="stop" title="Stop & rewind">■</button>
-        </div>
-        <div class="pad-footer">
-          <button class="btn-sm${pad.loop ? ' loop-on' : ''}" data-action="loop">⟳ LOOP</button>
-          <button class="btn-sm${pad.fadeEnabled ? ' fade-on' : ''}" data-action="fade-toggle">↓ FADE</button>
-          <button class="btn-sm stack-btn" data-action="stack">+ Stack</button>
-          <button class="btn-sm clear-pad" data-action="clear" title="Remove audio">✕</button>
-        </div>
-        <div class="pad-vol-row">
-          <span class="vol-label">VOL</span>
-          <input class="pad-vol-slider" type="range" min="0" max="1" step="0.01" value="${pad.vol}"
-                 id="pvol-${pad.id}" title="Pad volume: ${volPct}%">
-          <span class="vol-pct" id="pvol-pct-${pad.id}">${volPct}%</span>
-        </div>` : `
-        <div class="pad-footer">
-          <button class="btn-sm${pad.loop ? ' loop-on' : ''}" data-action="loop">⟳ LOOP</button>
-        </div>
-        <div class="pad-hint">${IS_TOUCH ? 'Tap to load audio' : '+ drop audio'}</div>`}
+          <button class="pad-ico${pad.loop ? ' loop-on' : ''}" data-action="loop" title="Loop">⟳</button>
+          <button class="pad-ico${pad.fadeEnabled ? ' fade-on' : ''}" data-action="fade-toggle" title="Fade in this pad even when global FADE IN is off">↗</button>
+          <button class="pad-ico" data-action="stack" title="Add to cue stack (or drag the pad onto the stack)">+</button>
+          <button class="pad-ico clear-pad" data-action="clear" title="Remove audio">✕</button>
+        </div>` : ''}
       </div>
     </div>
   `;
@@ -2266,17 +2383,10 @@ function refreshPadEl(el, pad) {
     });
   });
 
-  // Volume slider
-  const volSlider = document.getElementById(`pvol-${pad.id}`);
-  if (volSlider) {
-    volSlider.addEventListener('input', e => { e.stopPropagation(); setPadVolume(pad.id, e.target.value); });
-    volSlider.addEventListener('click', e => e.stopPropagation());
-  }
-
   // Click + drag to scrub progress bar
   // Uses offsetX / offsetWidth (both in the element's own CSS coordinate space)
   // so the ratio is correct at any padsScale zoom level — no getBoundingClientRect needed.
-  const pbar = document.getElementById(`pbar${pad.id}`);
+  const pbar = el.querySelector(`#pbar${pad.id}`);
   if (pbar) {
     const doSeek = (offsetXInBar) => {
       if (!pad.audio?.duration) return;
@@ -2310,7 +2420,7 @@ function refreshPadEl(el, pad) {
     pbar.addEventListener('click', e => e.stopPropagation());
   }
 
-  const pnameEl = document.getElementById(`pname${pad.id}`);
+  const pnameEl = el.querySelector(`#pname${pad.id}`);
   if (pnameEl) {
     // Desktop: double-click to rename
     pnameEl.addEventListener('dblclick', (e) => { e.stopPropagation(); startRename(pad.id); });
@@ -2323,15 +2433,59 @@ function refreshPadEl(el, pad) {
     }
   }
 
+  // Tile-level listeners: bind only once per element. refreshPadEl runs on every
+  // state change; binding each time stacked listeners (one click = several toggles).
+  if (el._kacBound) return;
+  el._kacBound = true;
+
   el.addEventListener('click', e => {
     if (e.target.closest('[data-action],input')) return;
     pad.file ? togglePad(pad.id) : browseFile(pad.id);
   });
-  el.addEventListener('dragover',  e => { e.preventDefault(); el.classList.add('drag-over'); });
-  el.addEventListener('dragleave', ()  => el.classList.remove('drag-over'));
+
+  // Drag the tile to reorder pads or drop it onto the cue stack.
+  // Not from the scrub bar / inputs, so seeking and renaming keep working.
+  el.addEventListener('pointerdown', e => {
+    el.draggable = !IS_TOUCH && !e.target.closest('.pad-progress, input');
+  });
+  el.addEventListener('dragstart', e => {
+    if (!el.draggable) { e.preventDefault(); return; }
+    _dragPadId = pad.id;
+    e.dataTransfer.effectAllowed = 'copyMove';
+    e.dataTransfer.setData('text/plain', pad.name || `Pad ${pad.id + 1}`);
+    el.classList.add('pad-dragging');
+  });
+  el.addEventListener('dragend', () => {
+    _dragPadId = null;
+    el.draggable = false;
+    document.querySelectorAll('.pad-dragging, .pad-drop-target, .pad.drag-over')
+      .forEach(x => x.classList.remove('pad-dragging', 'pad-drop-target', 'drag-over'));
+    document.getElementById('stackList')?.classList.remove('pad-drop');
+  });
+  el.addEventListener('dragover', e => {
+    if (_dragStackIdx !== null) return;
+    e.preventDefault();
+    if (_dragPadId !== null) {
+      e.dataTransfer.dropEffect = 'move';
+      if (_dragPadId !== pad.id) el.classList.add('pad-drop-target');
+    } else {
+      el.classList.add('drag-over');
+    }
+  });
+  el.addEventListener('dragleave', e => {
+    if (!el.contains(e.relatedTarget)) el.classList.remove('drag-over', 'pad-drop-target');
+  });
   el.addEventListener('drop', e => {
-    e.preventDefault(); el.classList.remove('drag-over');
-    if (e.dataTransfer.files[0]) loadFile(pad.id, e.dataTransfer.files[0]);
+    e.preventDefault();
+    el.classList.remove('drag-over', 'pad-drop-target');
+    if (_dragPadId !== null) {
+      const from = _dragPadId; _dragPadId = null;
+      movePad(from, pad.id);
+      return;
+    }
+    const dropped = Array.from(e.dataTransfer.files || []);
+    if (dropped.length > 1) fillPadsFrom(dropped, pad.id);
+    else if (dropped[0]) loadFile(pad.id, dropped[0]);
   });
 }
 
@@ -2359,7 +2513,15 @@ function startRaf() {
       const dur = pad.audio.duration;
       const cur = pad.audio.currentTime;
       if (bar)    bar.style.width = (dur ? cur / dur * 100 : 0) + '%';
-      if (timeEl) timeEl.textContent = dur ? `${fmt(cur)} / ${fmt(dur)}` : '--:-- / --:--';
+      if (timeEl) {
+        // Stopped: length of the IN–OUT section. Playing / paused: time left.
+        const endT = pad.outPoint ?? dur;
+        const live = pad.playing || pad.paused;
+        timeEl.textContent = !dur ? '--:--'
+          : live ? '-' + fmt(Math.max(0, endT - cur))
+          : fmt(Math.max(0, endT - (pad.inPoint ?? 0)));
+        timeEl.classList.toggle('running', !!pad.playing);
+      }
 
       if (dur) {
         // In marker
@@ -2566,7 +2728,7 @@ async function saveProject(name) {
   }
 
   const config = {
-    name, version: 3, savedAt: Date.now(),
+    name, version: 3, savedAt: Date.now(), gridCols,
     masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
     scenes: scenes.map(s => ({ id: s.id, name: s.name, stack: s.stack.map(serStackItem), stackIdx: s.stackIdx })),
     currentSceneIdx,
@@ -2665,6 +2827,7 @@ async function doLoadFromFolder(dirHandle, projectName) {
   fadeDuration    = config.fadeDuration ?? 2;
   fadeInDuration  = config.fadeInDuration ?? 0.2;
   padsScale       = config.padsScale    ?? config.uiScale ?? 1.0;
+  restoreGridCols(config.gridCols);
   stackScale      = config.stackScale   ?? 1.0;
   customShortcuts = config.customShortcuts ?? [];
   shortcutIdSeq   = customShortcuts.reduce((m, s) => Math.max(m, s.id + 1), 0);
@@ -2818,7 +2981,7 @@ async function doElectronSaveAs() {
 async function doElectronSave(savePath) {
   const projectName = savePath.replace(/.*[\\/]/, '').replace(/\.cuepro$/i, '');
   const config = {
-    name: projectName, version: 5, savedAt: Date.now(),
+    name: projectName, version: 5, savedAt: Date.now(), gridCols,
     masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
     scenes: scenes.map(s => ({
       id: s.id, name: s.name,
@@ -2930,6 +3093,7 @@ function restoreElectronProjectSettings(config) {
   fadeDuration    = config.fadeDuration    ?? 2;
   fadeInDuration  = config.fadeInDuration  ?? 0.2;
   padsScale       = config.padsScale       ?? config.uiScale ?? 1.0;
+  restoreGridCols(config.gridCols);
   stackScale      = config.stackScale      ?? 1.0;
   customShortcuts = config.customShortcuts ?? [];
   shortcutIdSeq   = customShortcuts.reduce((m, s) => Math.max(m, s.id + 1), 0);
@@ -3136,6 +3300,9 @@ function applyScales() {
   if (pe) pe.textContent = Math.round(padsScale * 100) + '%';
   const se = document.getElementById('stackScaleVal');
   if (se) se.textContent = Math.round(stackScale * 100) + '%';
+  document.documentElement.style.setProperty('--grid-cols', gridCols);
+  const gc = document.getElementById('gridColsVal');
+  if (gc) gc.textContent = gridCols;
   updateGridWidth();
 }
 
@@ -3149,6 +3316,157 @@ function updateGridWidth() {
   const availW = section.clientWidth - 28;
   // Set CSS width so that after zoom: css_width × padsScale = availW
   grid.style.width = Math.floor(availW / padsScale) + 'px';
+}
+
+// ── Pad grid columns / Stream Deck layout ───────────────────────
+// Pad N sits in grid cell (row = N div cols, col = N mod cols). The Stream Deck
+// plugin maps a key at (row, col) to pad row*columns+col, so with gridCols ==
+// Stream Deck columns both layouts are identical in both directions.
+function clampCols(n) {
+  n = parseInt(n, 10);
+  return Math.min(12, Math.max(2, isNaN(n) ? 4 : n));
+}
+function adjustGridCols(delta) {
+  gridCols = clampCols(gridCols + delta);
+  applyScales();
+  scheduleAutosave();
+  if (sdLayout && gridCols !== sdLayout.columns) setStatus(`Grid ${gridCols} columns — Stream Deck has ${sdLayout.columns}, layouts no longer match`);
+}
+// Project load: a connected Stream Deck wins over the saved column count.
+function restoreGridCols(saved) {
+  gridCols = sdLayout ? clampCols(sdLayout.columns) : clampCols(saved ?? gridCols);
+}
+function applySdLayout(cmd) {
+  const columns = parseInt(cmd.columns, 10), rows = parseInt(cmd.rows, 10);
+  if (!columns || !rows) return;
+  const changed = !sdLayout || sdLayout.columns !== columns || sdLayout.rows !== rows;
+  sdLayout = { columns, rows, mapped: Array.isArray(cmd.mapped) ? cmd.mapped.map(Number) : [] };
+  gridCols = clampCols(columns);
+  applyScales();
+  buildPads();
+  const info = document.getElementById('sdInfo');
+  if (info) info.textContent = `SD ${columns}×${rows}`;
+  if (changed) setStatus(`Stream Deck ${columns}×${rows} connected — pad grid matched`);
+}
+
+// ── Pad reorder (drag & drop) ───────────────────────────────
+// Pad ids are array indices everywhere (DOM ids, stack refs, shortcuts, Stream
+// Deck), so after moving we renumber and remap every reference.
+function movePad(from, to) {
+  if (from === to || from < 0 || to < 0 || from >= pads.length || to >= pads.length) return;
+  if (capturing !== null) { setStatus('Finish the shortcut capture first'); return; }
+  if (Object.keys(fadeTimers).length) { setStatus('Wait until the fade has finished, then move the pad'); return; }
+  const [moved] = pads.splice(from, 1);
+  pads.splice(to, 0, moved);
+  const remap = {};
+  pads.forEach((p, i) => { remap[p.id] = i; });
+  pads.forEach((p, i) => { p.id = i; });
+  scenes.forEach(s => s.stack.forEach(it => {
+    if (!isStandalone(it) && remap[it.padId] != null) it.padId = remap[it.padId];
+  }));
+  customShortcuts.forEach(sc => { if (remap[sc.padId] != null) sc.padId = remap[sc.padId]; });
+  buildPads();
+  renderStack();
+  scheduleAutosave();
+  scheduleBroadcast();
+  setStatus(`"${moved.name || 'Pad'}" moved to position ${to + 1}`);
+}
+
+// ── Stack panel: resizable width ──────────────────────────
+// Screen preference (per machine), like the theme — kept in localStorage.
+const STACK_W_DEFAULT = 282;
+const STACK_W_MIN     = 220;
+function applyStackWidth(w) {
+  const max = Math.max(STACK_W_MIN, Math.floor(window.innerWidth * 0.6));
+  w = Math.round(Math.min(max, Math.max(STACK_W_MIN, w)));
+  document.documentElement.style.setProperty('--stack-w', w + 'px');
+  return w;
+}
+function initStackResizer() {
+  if (IS_TOUCH) return;
+  let saved = null;
+  try { saved = parseInt(localStorage.getItem('cue-stack-w'), 10); } catch {}
+  if (saved) applyStackWidth(saved);
+  const h = document.getElementById('stackResizer');
+  if (!h) return;
+  let curW = saved || STACK_W_DEFAULT;
+  h.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    h.setPointerCapture(e.pointerId);
+    h.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+  });
+  h.addEventListener('pointermove', e => {
+    if (!h.hasPointerCapture(e.pointerId)) return;
+    curW = applyStackWidth(window.innerWidth - e.clientX);
+  });
+  const end = e => {
+    if (!h.hasPointerCapture(e.pointerId)) return;
+    h.releasePointerCapture(e.pointerId);
+    h.classList.remove('dragging');
+    document.body.style.cursor = '';
+    try { localStorage.setItem('cue-stack-w', String(curW)); } catch {}
+  };
+  h.addEventListener('pointerup', end);
+  h.addEventListener('pointercancel', end);
+  h.addEventListener('dblclick', () => {
+    curW = applyStackWidth(STACK_W_DEFAULT);
+    try { localStorage.removeItem('cue-stack-w'); } catch {}
+  });
+}
+
+// ── Stack panel: drag & drop (reorder items, drop pads in) ──────
+function initStackDnD() {
+  const list = document.getElementById('stackList');
+  if (!list) return;
+  const clearMarks = () => {
+    list.querySelectorAll('.drop-before,.drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after'));
+    list.classList.remove('pad-drop');
+  };
+  // Insertion index for the pointer position (before/after the hovered item).
+  const dropIndex = e => {
+    const it = e.target.closest('.stack-item');
+    if (!it) return { it: null, at: getScene().stack.length };
+    const r = it.getBoundingClientRect();
+    const after = e.clientY >= r.top + r.height / 2;
+    return { it, after, at: +it.dataset.si + (after ? 1 : 0) };
+  };
+  list.addEventListener('dragstart', e => {
+    const it = e.target.closest?.('.stack-item');
+    if (!it) return;
+    _dragStackIdx = +it.dataset.si;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', it.querySelector('.stack-lbl')?.textContent || '');
+    it.classList.add('dragging');
+  });
+  list.addEventListener('dragend', () => {
+    _dragStackIdx = null;
+    clearMarks();
+    list.querySelectorAll('.dragging').forEach(x => x.classList.remove('dragging'));
+  });
+  list.addEventListener('dragover', e => {
+    if (_dragStackIdx === null && _dragPadId === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = _dragPadId !== null ? 'copy' : 'move';
+    clearMarks();
+    const { it, after } = dropIndex(e);
+    if (it) it.classList.add(after ? 'drop-after' : 'drop-before');
+    else if (_dragPadId !== null) list.classList.add('pad-drop');
+  });
+  list.addEventListener('dragleave', e => { if (!list.contains(e.relatedTarget)) clearMarks(); });
+  list.addEventListener('drop', e => {
+    if (_dragStackIdx === null && _dragPadId === null) return;
+    e.preventDefault();
+    const { at } = dropIndex(e);
+    clearMarks();
+    if (_dragStackIdx !== null) {
+      const from = _dragStackIdx; _dragStackIdx = null;
+      moveStackItemTo(from, at);
+    } else {
+      const pid = _dragPadId; _dragPadId = null;
+      insertPadIntoStack(pid, at);
+    }
+  });
 }
 
 // ── Autosave ──────────────────────────────────────────────
@@ -3182,7 +3500,7 @@ function scheduleAutosave() {
 }
 function saveAutosave() {
   const data = {
-    savedAt: Date.now(),
+    savedAt: Date.now(), gridCols,
     masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale, currentSavePath,
     scenes: scenes.map(s => ({ id: s.id, name: s.name, stack: s.stack.map(serStackItem), stackIdx: s.stackIdx })),
     currentSceneIdx,
@@ -3222,6 +3540,7 @@ function restoreSessionData(data) {
   fadeDuration    = data.fadeDuration ?? 2;
   fadeInDuration  = data.fadeInDuration ?? 0.2;
   padsScale       = data.padsScale    ?? data.uiScale ?? 1.0;
+  restoreGridCols(data.gridCols);
   stackScale      = data.stackScale   ?? 1.0;
   currentSavePath = data.currentSavePath || null;
 
@@ -3327,6 +3646,7 @@ if (typeof window !== 'undefined' && window.electronAPI?.onApiCommand) {
     if (cmd.type === 'stop_all') stopAll();
     if (cmd.type === 'play_cue') playCue();
     if (cmd.type === 'next_cue') nextCue();
+    if (cmd.type === 'sd_layout') applySdLayout(cmd);
   });
 
   // Stream Deck plugin just connected – send full state immediately
@@ -3407,7 +3727,7 @@ async function doSaveProjectIDB(name) {
   }
 
   const config = {
-    name, version: 4, savedAt: Date.now(),
+    name, version: 4, savedAt: Date.now(), gridCols,
     masterVol, autoAdv, autoSelect, fadeDuration, fadeInDuration, fadeInGlobal, stopFadeGlobal, padsScale, stackScale,
     scenes: scenes.map(s => ({
       id: s.id, name: s.name,
@@ -3513,6 +3833,7 @@ async function loadProjectIDB(name) {
   fadeDuration    = config.fadeDuration ?? 2;
   fadeInDuration  = config.fadeInDuration ?? 0.2;
   padsScale       = config.padsScale    ?? 1.0;
+  restoreGridCols(config.gridCols);
   stackScale      = config.stackScale   ?? 1.0;
   customShortcuts = config.customShortcuts ?? [];
   shortcutIdSeq   = customShortcuts.reduce((m, s) => Math.max(m, s.id + 1), 0);
